@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Plus, Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Building2, GraduationCap, Users, CheckSquare, Folder, Trash2, X, ChevronDown, ChevronRight as ChevronRightIcon, Tag, Settings, MapPin, LayoutGrid, List, Clock, AlertTriangle, ExternalLink, Bell, User, Library, MessageSquare, FileText, Bookmark, Send, History, MessageSquareText, Sparkles, UserPlus, Lock, ShieldCheck } from 'lucide-react';
+import { Search, Plus, Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Building2, GraduationCap, Users, CheckSquare, Folder, Trash2, X, ChevronDown, ChevronRight as ChevronRightIcon, Tag, Settings, MapPin, LayoutGrid, List, Clock, AlertTriangle, ExternalLink, Bell, User, Library, MessageSquare, FileText, Bookmark, Send, History, MessageSquareText, Sparkles, UserPlus, Lock, ShieldCheck, LogOut, Pencil, Save } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, doc, setDoc, deleteDoc, updateDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore';
@@ -12,12 +12,12 @@ const getFirebaseConfig = () => {
     return JSON.parse(__firebase_config);
   }
   return {
-    apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho",
-    authDomain: "seiki-portal.firebaseapp.com",
-    projectId: "seiki-portal",
-    storageBucket: "seiki-portal.firebasestorage.app",
-    messagingSenderId: "806874141485",
-    appId: "1:806874141485:web:76f51d0dd67664542079a4"
+  apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho",
+  authDomain: "seiki-portal.firebaseapp.com",
+  projectId: "seiki-portal",
+  storageBucket: "seiki-portal.firebasestorage.app",
+  messagingSenderId: "806874141485",
+  appId: "1:806874141485:web:76f51d0dd67664542079a4"
   };
 };
 
@@ -28,17 +28,62 @@ const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'seiki-portal';
 
 // ==========================================
-// 2. 定数・初期デモデータ
+// 2. 定数・初期データ
 // ==========================================
 const DEFAULT_GRADES = ["小1", "小2", "小3", "小4", "小5", "小6", "中1", "中2", "中3", "全学年"];
 const DEFAULT_COURSES = ["S-kids", "玉井式", "SSJ", "中学受験", "SSS", "同志社専科", "公立中高一貫", "TOP高校", "スコップ", "新・中学部", "HSS", "Zクラス", "Sクラス"]; 
-const CATEGORIES = ["通常授業", "季節講習", "模試・テスト", "イベント", "面談・保護者会", "教室運営", "事務連絡", "その他"];
+
+// カテゴリーを階層化対応に変更
+const CATEGORIES = [
+  { name: "通常授業", subcategories: [] },
+  { name: "季節講習", subcategories: [] },
+  { name: "模試・テスト", subcategories: [] },
+  { name: "イベント", subcategories: [] },
+  { name: "面談・保護者会", subcategories: [] },
+  { name: "教室運営", subcategories: [] },
+  { name: "事務連絡", subcategories: [] },
+  { name: "その他", subcategories: [] }
+];
 const MANUAL_CATEGORIES = ["人事", "DX", "マーケティング", "経理財務", "総務", "その他"];
 
+// 初期登録メンバー一覧（仮PW: seiki）
+const INITIAL_USERS = [
+  { name: '本部', branch: '全教室', role: '管理者', password: 'Seiki1962' },
+  { name: '稲永昌大', branch: '知求館（北大路）', role: '教室長', password: 'seiki' },
+  { name: '馬谷伸一', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '合路郁子', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '亀井淳史', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '杉村茉衣', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '森岡優希', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '小髙みずき', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '金地和也', branch: 'SSS（烏丸二条）', role: 'スタッフ', password: 'seiki' },
+  { name: '大本富子', branch: 'SSS（烏丸二条）', role: 'スタッフ', password: 'seiki' },
+  { name: '齊藤明子', branch: 'SSS（烏丸二条）', role: 'スタッフ', password: 'seiki' },
+  { name: '野々村忠大', branch: '京大北教室', role: '教室長', password: 'seiki' },
+  { name: '福田麻衣', branch: '京大北教室', role: 'スタッフ', password: 'seiki' },
+  { name: '永禮慎二', branch: '桂教室', role: '教室長', password: 'seiki' },
+  { name: '岡崎尚美', branch: '桂教室', role: 'スタッフ', password: 'seiki' },
+  { name: '岸田太郎', branch: '桂教室', role: 'スタッフ', password: 'seiki' },
+  { name: '杉野文音', branch: '桂教室', role: 'スタッフ', password: 'seiki' }
+];
+
+// 初期エリア・教室構成
+const INITIAL_ORG_DATA = [
+  {
+    name: "次世代第1エリア",
+    branches: [
+      { name: "知求館（北大路）", staff: ["稲永昌大", "馬谷伸一", "合路郁子", "亀井淳史", "杉村茉衣", "森岡優希", "小髙みずき"] },
+      { name: "SSS（烏丸二条）", staff: ["金地和也", "大本富子", "齊藤明子"] },
+      { name: "京大北教室", staff: ["野々村忠大", "福田麻衣"] },
+      { name: "桂教室", staff: ["永禮慎二", "岡崎尚美", "岸田太郎", "杉野文音"] }
+    ]
+  }
+];
+
 const TEMPLATES = [
-  { id: 't1', name: '休講連絡', title: '【緊急】〇〇による休講判断について', type: 'info', category: '事務連絡', isUrgent: true, summary: '〇〇のため、本日の授業は休講といたします。\n対象教室：\n生徒への対応：\nその他：' },
-  { id: 't2', name: '月次報告', title: '【〇月度】教室運営・月次報告', type: 'info', category: '教室運営', isUrgent: false, summary: '■ 今月の目標達成状況\n\n■ 現場の課題と対策\n\n■ その他共有事項' },
-  { id: 't3', name: 'イベント告知', title: '【イベント】〇〇開催のお知らせ', type: 'info', category: 'イベント', isUrgent: false, summary: 'イベント名：\n日時：\n場所：\n対象学年：\n内容詳細：' }
+  { id: 't1', name: '休講連絡', title: '【緊急】〇〇による休講判断について', type: 'info', category: '事務連絡', subCategory: '', isUrgent: true, summary: '〇〇のため、本日の授業は休講といたします。\n対象教室：\n生徒への対応：\nその他：' },
+  { id: 't2', name: '月次報告', title: '【〇月度】教室運営・月次報告', type: 'info', category: '教室運営', subCategory: '', isUrgent: false, summary: '■ 今月の目標達成状況\n\n■ 現場の課題と対策\n\n■ その他共有事項' },
+  { id: 't3', name: 'イベント告知', title: '【イベント】〇〇開催のお知らせ', type: 'info', category: 'イベント', subCategory: '', isUrgent: false, summary: 'イベント名：\n日時：\n場所：\n対象学年：\n内容詳細：' }
 ];
 
 // ==========================================
@@ -49,6 +94,7 @@ const ItemCard = ({ item, currentUser, onSelect, onToggleBookmark, onDelete }) =
   const isRead = item.readBy?.includes(currentUser.id);
   const isMyTask = item.type === 'task' && item.assignee === currentUser.name;
   const isBookmarked = item.bookmarkedBy?.includes(currentUser.id);
+  const canDelete = currentUser.role === '管理者' || item.author === currentUser.name;
 
   return (
     <div 
@@ -60,7 +106,9 @@ const ItemCard = ({ item, currentUser, onSelect, onToggleBookmark, onDelete }) =
       <div className="flex items-start justify-between mb-2 gap-2">
         <div className="flex flex-wrap gap-1 pr-6">
           {item.isUrgent && <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">緊急</span>}
-          <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">{item.category}</span>
+          <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
+            {item.category}{item.subCategory ? ` > ${item.subCategory}` : ''}
+          </span>
           {item.branch !== '全教室' && <span className="border border-slate-200 text-slate-500 text-[10px] font-bold px-1.5 py-0.5 rounded">{item.branch}</span>}
         </div>
         <button 
@@ -82,13 +130,15 @@ const ItemCard = ({ item, currentUser, onSelect, onToggleBookmark, onDelete }) =
           <span>{item.author}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} 
-            className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 absolute right-16 top-1/2 -translate-y-1/2" 
-            title="削除"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {canDelete && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} 
+              className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 absolute right-16 top-1/2 -translate-y-1/2" 
+              title="削除"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
           {item.comments?.length > 0 && (
             <span className="flex items-center gap-0.5 text-blue-600 bg-blue-50 px-1.5 rounded">
               <MessageSquareText className="w-3 h-3"/> {item.comments.length}
@@ -126,19 +176,12 @@ export default function IntegratedPortal() {
 
   // 初回セットアップ管理
   const [isSeeding, setIsSeeding] = useState(false); 
-  const [setupPhase, setSetupPhase] = useState('auth'); // 'auth' -> 'wizard'
+  const [setupPhase, setSetupPhase] = useState('auth'); // 'auth' -> 'wizard' -> 'done'
   const [setupAuthPass, setSetupAuthPass] = useState('');
   const [setupError, setSetupError] = useState('');
-  const [wizardData, setWizardData] = useState({
-    adminName: '管理者',
-    adminPass: '1234',
-    branchesText: '知求館（北大路）\nSSS（烏丸二条）\n京大北教室\n桂教室',
-    gradesText: DEFAULT_GRADES.join('\n'),
-    coursesText: DEFAULT_COURSES.join('\n')
-  });
 
   const [filters, setFilters] = useState({
-    quick: 'all', areas: [], branches: [], grades: [], courses: [], categories: [], manualCategories: []
+    quick: 'all', areas: [], branches: [], grades: [], courses: [], categories: [], subCategories: [], manualCategories: []
   });
   
   const [expandedSections, setExpandedSections] = useState({ 
@@ -152,16 +195,21 @@ export default function IntegratedPortal() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isOrgSettingsOpen, setIsOrgSettingsOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
   const [settingsTab, setSettingsTab] = useState('org');
 
-  // 新規投稿・招待フォームステート
+  // 新規投稿・招待・パスワード・メンバー編集フォームステート
   const [newTask, setNewTask] = useState({ 
-    type: 'task', title: "", url: "", area: "第１エリア", branch: "全教室", assignType: 'staff', selectedTargets: [], dueDate: "", category: "通常授業", grades: [], courses: [], summary: "" 
+    type: 'task', title: "", url: "", area: "次世代第1エリア", branch: "全教室", assignType: 'staff', selectedTargets: [], dueDate: "", category: "通常授業", subCategory: "", grades: [], courses: [], summary: "" 
   });
   const [newUserName, setNewUserName] = useState('');
   const [newUserBranch, setNewUserBranch] = useState('全教室');
-  const [newUserRole, setNewUserRole] = useState('スタッフ');
+  const [newUserRole, setNewUserRole] = useState(''); // 必須解除のため初期値は空
+  const [newPassword, setNewPassword] = useState('');
+  
+  const [editingMemberId, setEditingMemberId] = useState(null);
+  const [editMemberForm, setEditMemberForm] = useState({ name: '', branch: '', role: '', password: '' });
 
   // 設定入力ステート
   const [newAreaName, setNewAreaName] = useState('');
@@ -172,8 +220,11 @@ export default function IntegratedPortal() {
   const [newCourseName, setNewCourseName] = useState('');
   const [newGradeName, setNewGradeName] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [addingSubCategoryTo, setAddingSubCategoryTo] = useState(null);
+  const [newSubCategoryName, setNewSubCategoryName] = useState('');
   const [newManualCategoryName, setNewManualCategoryName] = useState('');
 
+  const [selectedLoginBranch, setSelectedLoginBranch] = useState(null);
   const [selectedLoginUser, setSelectedLoginUser] = useState(null);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -223,7 +274,8 @@ export default function IntegratedPortal() {
           orgData: data.orgData || [],
           courses: data.courses || DEFAULT_COURSES,
           grades: data.grades || DEFAULT_GRADES,
-          categories: data.categories || CATEGORIES,
+          // 古い配列形式だった場合はオブジェクト配列に変換して保持
+          categories: (data.categories || CATEGORIES).map(c => typeof c === 'string' ? { name: c, subcategories: [] } : c),
           manualCategories: data.manualCategories || MANUAL_CATEGORIES
         });
       }
@@ -275,7 +327,13 @@ export default function IntegratedPortal() {
       if (item.type === 'manual') {
         matchesCategory = filters.manualCategories.length === 0 || filters.manualCategories.includes(item.category);
       } else {
-        matchesCategory = filters.categories.length === 0 || filters.categories.includes(item.category);
+        if (filters.categories.length === 0 && filters.subCategories.length === 0) {
+          matchesCategory = true;
+        } else {
+          const matchCat = filters.categories.includes(item.category);
+          const matchSub = item.subCategory && filters.subCategories.includes(item.subCategory);
+          matchesCategory = matchCat || matchSub;
+        }
       }
 
       const matchesDate = !selectedDate || item.dueDate === selectedDate;
@@ -309,15 +367,18 @@ export default function IntegratedPortal() {
     filters.grades.forEach(v => badges.push({ type: 'grades', value: v, label: v }));
     filters.courses.forEach(v => badges.push({ type: 'courses', value: v, label: v }));
     filters.categories.forEach(v => badges.push({ type: 'categories', value: v, label: v }));
+    filters.subCategories.forEach(v => badges.push({ type: 'subCategories', value: v, label: v }));
     filters.manualCategories.forEach(v => badges.push({ type: 'manualCategories', value: v, label: v }));
     if (selectedDate) badges.push({ type: 'date', value: selectedDate, label: new Date(selectedDate).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' }) });
     return badges;
   }, [filters, selectedDate]);
 
+  // 教務関連（マニュアル以外）のフィルターが選択されているか
+  const hasKyomuFilter = filters.areas.length > 0 || filters.branches.length > 0 || filters.grades.length > 0 || filters.courses.length > 0 || filters.categories.length > 0 || filters.subCategories.length > 0;
+
 
   // --- Firebase データ更新ハンドラー ---
 
-  // 初回セットアップ管理用：認証チェック
   const handleAdminAuth = (e) => {
     e.preventDefault();
     if (setupAuthPass === 'Seiki1962') {
@@ -328,54 +389,33 @@ export default function IntegratedPortal() {
     }
   };
 
-  // 初回セットアップ実行
-  const executeSetup = async (e) => {
-    e.preventDefault();
+  const executeSetup = async () => {
     setIsSeeding(true);
     try {
       const batch = writeBatch(db);
       
-      const branches = wizardData.branchesText.split('\n').map(s=>s.trim()).filter(Boolean);
-      const grades = wizardData.gradesText.split('\n').map(s=>s.trim()).filter(Boolean);
-      const courses = wizardData.coursesText.split('\n').map(s=>s.trim()).filter(Boolean);
-  
-      // 管理者ユーザー作成
       const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
-      const adminDocRef = doc(membersRef);
-      const newAdmin = {
-        name: wizardData.adminName,
-        branch: '全教室',
-        role: '管理者',
-        password: wizardData.adminPass
-      };
-      batch.set(adminDocRef, newAdmin);
+      INITIAL_USERS.forEach(u => {
+        const docRef = doc(membersRef);
+        batch.set(docRef, u);
+      });
   
-      // 組織データ作成（初期設定時はひとまず「基本エリア」にまとめる）
-      const orgData = [{
-        name: "基本エリア",
-        branches: branches.map(name => ({ name, staff: [wizardData.adminName] }))
-      }];
-  
-      // 設定マスターの保存
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master');
       batch.set(settingsRef, {
-        orgData,
-        grades: grades.length > 0 ? grades : DEFAULT_GRADES,
-        courses: courses.length > 0 ? courses : DEFAULT_COURSES,
+        orgData: INITIAL_ORG_DATA,
+        grades: DEFAULT_GRADES,
+        courses: DEFAULT_COURSES,
         categories: CATEGORIES, 
         manualCategories: MANUAL_CATEGORIES
       });
       
-      // ウェルカムメッセージ
       const postsRef = collection(db, 'artifacts', appId, 'public', 'data', 'posts');
       batch.set(doc(postsRef), {
-         type: 'info', title: '【完了】SEIKI Portalの初期セットアップが完了しました 🎉', area: '全エリア', branch: '全教室', assignee: '-', status: 'unread', dueDate: '', grades: [], courses: [], category: 'システム', author: 'システム', readBy: [], snoozedBy: [], bookmarkedBy: [], comments: [], summary: 'ポータルの利用を開始できます。\n\n右上の「歯車アイコン」をクリックすると、エリアの追加、教室やスタッフの追加、マニュアルカテゴリー等の変更がいつでも可能です。', createdAt: serverTimestamp()
+         type: 'info', title: '【完了】SEIKI Portalの初期セットアップが完了しました 🎉', area: '全エリア', branch: '全教室', assignee: '-', status: 'unread', dueDate: '', grades: [], courses: [], category: 'システム', author: 'システム', readBy: [], snoozedBy: [], bookmarkedBy: [], comments: [], summary: 'ポータルの利用を開始できます。右上の歯車アイコン（管理者のみ）から各種設定を変更可能です。', createdAt: serverTimestamp()
       });
   
       await batch.commit();
-      
-      // セットアップ完了後、作成したユーザーで自動ログイン
-      setCurrentUser({ id: adminDocRef.id, ...newAdmin });
+      setSetupPhase('done');
     } catch(e) {
       console.error(e);
       alert("セットアップに失敗しました。");
@@ -447,6 +487,76 @@ export default function IntegratedPortal() {
     });
   };
 
+  const handleDeleteMember = (memberId, memberName, memberBranch) => {
+    setConfirmDialog({
+      isOpen: true,
+      message: `${memberName} さんのアカウントを削除しますか？`,
+      onConfirm: async () => {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', memberId));
+        
+        if (memberBranch !== '全教室') {
+          const newOrgData = settings.orgData.map(area => ({
+            ...area,
+            branches: area.branches.map(b => 
+              b.name === memberBranch ? { ...b, staff: b.staff.filter(s => s !== memberName) } : b
+            )
+          }));
+          await updateSettings({ orgData: newOrgData });
+        }
+      }
+    });
+  };
+
+  const handleUpdateMember = async (memberId, oldData, newData) => {
+    if (!newData.name.trim() || !newData.password.trim()) {
+      alert("名前とパスワードは必須です。");
+      return;
+    }
+
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', memberId), {
+      name: newData.name.trim(),
+      branch: newData.branch,
+      role: newData.role,
+      password: newData.password.trim()
+    });
+
+    if (oldData.name !== newData.name.trim() || oldData.branch !== newData.branch) {
+      let newOrgData = JSON.parse(JSON.stringify(settings.orgData)); 
+
+      if (oldData.branch !== '全教室') {
+        newOrgData = newOrgData.map(area => ({
+          ...area,
+          branches: area.branches.map(b => 
+            b.name === oldData.branch ? { ...b, staff: b.staff.filter(s => s !== oldData.name) } : b
+          )
+        }));
+      }
+      if (newData.branch !== '全教室') {
+        newOrgData = newOrgData.map(area => ({
+          ...area,
+          branches: area.branches.map(b => 
+            b.name === newData.branch && !b.staff.includes(newData.name.trim()) ? { ...b, staff: [...b.staff, newData.name.trim()] } : b
+          )
+        }));
+      }
+      await updateSettings({ orgData: newOrgData });
+    }
+
+    setEditingMemberId(null);
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (!newPassword.trim()) return;
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'members', currentUser.id), {
+      password: newPassword.trim()
+    });
+    setCurrentUser({ ...currentUser, password: newPassword.trim() });
+    setIsPasswordModalOpen(false);
+    setNewPassword('');
+    alert("パスワードを変更しました。");
+  };
+
   const handleAddTask = async (e) => {
     e.preventDefault();
     if (!authUser) return;
@@ -470,19 +580,19 @@ export default function IntegratedPortal() {
           type: 'task', title: newTask.title, url: newTask.url, area: newTask.area,
           branch: newTask.assignType === 'branch' ? target : getStaffBranch(target),
           assignee: newTask.assignType === 'staff' ? target : '-',
-          status: 'todo', dueDate: newTask.dueDate, grades: newTask.grades, courses: newTask.courses, category: newTask.category, author: currentUser.name, readBy: [], snoozedBy: [], bookmarkedBy: [], comments: [], summary: newTask.summary, createdAt: serverTimestamp()
+          status: 'todo', dueDate: newTask.dueDate, grades: newTask.grades, courses: newTask.courses, category: newTask.category, subCategory: newTask.subCategory, author: currentUser.name, readBy: [], snoozedBy: [], bookmarkedBy: [], comments: [], summary: newTask.summary, createdAt: serverTimestamp()
         });
       });
     } else {
       const newDocRef = doc(postsRef);
       batch.set(newDocRef, {
-        type: newTask.type, title: newTask.title, url: newTask.url, area: newTask.area, branch: newTask.branch, assignee: '-', status: 'unread', dueDate: newTask.dueDate, grades: newTask.grades, courses: newTask.courses, category: newTask.category, author: currentUser.name, readBy: [], snoozedBy: [], bookmarkedBy: [], comments: [], summary: newTask.summary, createdAt: serverTimestamp()
+        type: newTask.type, title: newTask.title, url: newTask.url, area: newTask.area, branch: newTask.branch, assignee: '-', status: 'unread', dueDate: newTask.dueDate, grades: newTask.grades, courses: newTask.courses, category: newTask.category, subCategory: newTask.subCategory, author: currentUser.name, readBy: [], snoozedBy: [], bookmarkedBy: [], comments: [], summary: newTask.summary, createdAt: serverTimestamp()
       });
     }
 
     await batch.commit();
     setIsTaskModalOpen(false);
-    setNewTask({ type: 'task', title: "", url: "", area: settings.orgData[0]?.name || "基本エリア", branch: "全教室", assignType: 'staff', selectedTargets: [], dueDate: "", category: settings.categories[0] || "通常授業", grades: [], courses: [], summary: "" });
+    setNewTask({ type: 'task', title: "", url: "", area: settings.orgData[0]?.name || "次世代第1エリア", branch: "全教室", assignType: 'staff', selectedTargets: [], dueDate: "", category: settings.categories[0]?.name || "通常授業", subCategory: "", grades: [], courses: [], summary: "" });
   };
 
   const handleInviteUser = async (e) => {
@@ -493,7 +603,7 @@ export default function IntegratedPortal() {
       name: newUserName.trim(),
       branch: newUserBranch,
       role: newUserRole,
-      password: '1234'
+      password: 'seiki'
     };
     
     const membersRef = collection(db, 'artifacts', appId, 'public', 'data', 'members');
@@ -511,30 +621,38 @@ export default function IntegratedPortal() {
     
     setIsInviteModalOpen(false);
     setNewUserName('');
+    setNewUserRole('');
   };
 
   const toggleSection = (section) => setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  
   const activateMainView = (mode) => {
     if (mode !== 'home') setIsCalendarExpanded(false);
     else setIsCalendarExpanded(true);
     setViewMode(mode);
   };
+
   const toggleFilter = (type, value) => {
+    const isKyomuFilter = ['areas', 'branches', 'grades', 'courses', 'categories', 'subCategories'].includes(type);
+    // マニュアル閲覧中に教務用フィルターが選ばれたらリストビューに戻す
+    if (isKyomuFilter && viewMode === 'manuals') activateMainView('list');
     if (viewMode === 'home') activateMainView('list');
+    
     setFilters(prev => {
       const current = prev[type];
       return current.includes(value) ? { ...prev, [type]: current.filter(v => v !== value) } : { ...prev, [type]: [...current, value] };
     });
   };
+
   const applyTemplate = (template) => {
-    setNewTask(prev => ({ ...prev, type: template.type, title: template.title, category: template.category, isUrgent: template.isUrgent, summary: template.summary }));
+    setNewTask(prev => ({ ...prev, type: template.type, title: template.title, category: template.category, subCategory: template.subCategory || '', isUrgent: template.isUrgent, summary: template.summary }));
   };
   const removeFilterBadge = (type, value) => {
     if (type === 'quick') setFilters(prev => ({ ...prev, quick: 'all' }));
     else setFilters(prev => ({ ...prev, [type]: prev[type].filter(v => v !== value) }));
   };
   const clearAllFilters = () => {
-    setFilters({ quick: 'all', areas: [], branches: [], grades: [], courses: [], categories: [], manualCategories: [] });
+    setFilters({ quick: 'all', areas: [], branches: [], grades: [], courses: [], categories: [], subCategories: [], manualCategories: [] });
     setSelectedDate(null);
     setSearchQuery("");
   };
@@ -565,7 +683,7 @@ export default function IntegratedPortal() {
   }
   const handleAddStaff = (areaName, branchName) => { 
     if (newStaffName.trim()) { 
-      updateSettings({ orgData: settings.orgData.map(a => a.name === areaName ? { ...a, branches: a.branches.map(b => b.name === branchName ? { ...b, staff: [...b.staff, newStaffName.trim()] } : b) } : a) });
+      updateSettings({ orgData: settings.orgData.map(a => a.name === areaName ? { ...a, branches: a.branches.map(b => b.name === branchName && !b.staff.includes(newStaffName.trim()) ? { ...b, staff: [...b.staff, newStaffName.trim()] } : b) } : a) });
       setNewStaffName(''); setAddingStaffTo(null); 
     } 
   };
@@ -590,15 +708,36 @@ export default function IntegratedPortal() {
   const handleDeleteGrade = (grade) => { 
     setConfirmDialog({ isOpen: true, message: `学年「${grade}」を削除しますか？`, onConfirm: () => updateSettings({ grades: (settings.grades || []).filter(c => c !== grade) }) }); 
   }
+
+  // カテゴリー管理のアクション
   const handleAddCategory = () => { 
-    if(newCategoryName.trim() && !settings.categories.includes(newCategoryName.trim())) { 
-      updateSettings({ categories: [...settings.categories, newCategoryName.trim()] });
+    if(newCategoryName.trim() && !settings.categories.find(c => c.name === newCategoryName.trim())) { 
+      updateSettings({ categories: [...settings.categories, { name: newCategoryName.trim(), subcategories: [] }] });
       setNewCategoryName(''); 
     } 
   }
-  const handleDeleteCategory = (cat) => { 
-    setConfirmDialog({ isOpen: true, message: `カテゴリー「${cat}」を削除しますか？`, onConfirm: () => updateSettings({ categories: settings.categories.filter(c => c !== cat) }) }); 
+  const handleDeleteCategory = (catName) => { 
+    setConfirmDialog({ isOpen: true, message: `カテゴリー「${catName}」を削除しますか？`, onConfirm: () => updateSettings({ categories: settings.categories.filter(c => c.name !== catName) }) }); 
   }
+  const handleAddSubCategory = (catName) => {
+    if (newSubCategoryName.trim()) {
+      updateSettings({
+        categories: settings.categories.map(c => 
+          c.name === catName ? { ...c, subcategories: [...(c.subcategories || []), newSubCategoryName.trim()] } : c
+        )
+      });
+      setNewSubCategoryName('');
+      setAddingSubCategoryTo(null);
+    }
+  }
+  const handleDeleteSubCategory = (catName, subName) => {
+    setConfirmDialog({ isOpen: true, message: `サブカテゴリー「${subName}」を削除しますか？`, onConfirm: () => updateSettings({
+      categories: settings.categories.map(c => 
+        c.name === catName ? { ...c, subcategories: (c.subcategories || []).filter(s => s !== subName) } : c
+      )
+    })});
+  }
+
   const handleAddManualCategory = () => { 
     if(newManualCategoryName.trim() && !settings.manualCategories.includes(newManualCategoryName.trim())) { 
       updateSettings({ manualCategories: [...settings.manualCategories, newManualCategoryName.trim()] });
@@ -619,7 +758,7 @@ export default function IntegratedPortal() {
         
         {members.length === 0 ? (
           // 初回セットアップ画面群
-          <div className={`bg-white p-8 rounded-2xl shadow-2xl w-full animate-in fade-in zoom-in duration-300 border border-slate-200 z-10 transition-all ${setupPhase === 'wizard' ? 'max-w-2xl' : 'max-w-md'}`}>
+          <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-300 border border-slate-200 z-10 transition-all">
             <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30">
               <ShieldCheck className="text-white w-8 h-8" />
             </div>
@@ -644,89 +783,64 @@ export default function IntegratedPortal() {
                   </button>
                 </form>
               </div>
-            ) : (
-              <div className="mt-6 animate-in fade-in slide-in-from-right-4">
+            ) : setupPhase === 'wizard' ? (
+              <div className="mt-6 text-center animate-in fade-in slide-in-from-right-4">
                 <div className="border-b border-slate-200 pb-4 mb-6">
                   <h2 className="text-lg font-black text-slate-800">初期マスターデータの設定</h2>
-                  <p className="text-sm text-slate-500 mt-1">教室や学年の初期値を入力してください。（設定後、右上の歯車アイコンからいつでも追加・修正が可能です）</p>
+                  <p className="text-sm text-slate-500 mt-2">管理者認証に成功しました。<br/>登録済みのメンバーや教室データを<br/>システムに自動で投入します。</p>
                 </div>
                 
-                <form onSubmit={executeSetup} className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                  <div className="bg-slate-50 p-5 rounded-xl border border-slate-200">
-                    <h3 className="font-bold text-sm text-slate-700 mb-3 flex items-center gap-2"><User className="w-4 h-4"/> 最初の管理者アカウント</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">お名前 <span className="text-red-500">*</span></label>
-                        <input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" value={wizardData.adminName} onChange={e => setWizardData({...wizardData, adminName: e.target.value})} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">ログイン用パスワード <span className="text-red-500">*</span></label>
-                        <input type="text" required className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" value={wizardData.adminPass} onChange={e => setWizardData({...wizardData, adminPass: e.target.value})} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Building2 className="w-4 h-4"/> 教室一覧</label>
-                      <p className="text-[10px] text-slate-500 mb-2">改行して複数の教室を入力してください</p>
-                      <textarea 
-                        rows={6} required
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none resize-none leading-relaxed"
-                        value={wizardData.branchesText} onChange={e => setWizardData({...wizardData, branchesText: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><GraduationCap className="w-4 h-4"/> 学年一覧</label>
-                      <p className="text-[10px] text-slate-500 mb-2">改行して学年を入力してください</p>
-                      <textarea 
-                        rows={6} required
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none resize-none leading-relaxed"
-                        value={wizardData.gradesText} onChange={e => setWizardData({...wizardData, gradesText: e.target.value})}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Users className="w-4 h-4"/> コース一覧</label>
-                    <textarea 
-                      rows={4} required
-                      className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none resize-none leading-relaxed"
-                      value={wizardData.coursesText} onChange={e => setWizardData({...wizardData, coursesText: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-200">
-                    <button type="submit" disabled={isSeeding} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-md hover:bg-blue-700 transition-colors disabled:bg-slate-400 active:scale-95">
-                      {isSeeding ? 'セットアップ実行中...' : '設定を保存してポータルを開始する'}
-                    </button>
-                  </div>
-                </form>
+                <button onClick={executeSetup} disabled={isSeeding} className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg shadow-md hover:bg-blue-700 transition-colors disabled:bg-slate-400 active:scale-95">
+                  {isSeeding ? 'セットアップ実行中...' : '初期データをセットアップする'}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-6 text-center animate-in fade-in zoom-in">
+                 <h2 className="text-xl font-black text-blue-600 mb-2">セットアップ完了！</h2>
+                 <p className="text-sm text-slate-500 mb-6">画面を再読み込みすると、<br/>ログイン画面が表示されます。</p>
+                 <button onClick={() => window.location.reload()} className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors">再読み込み</button>
               </div>
             )}
           </div>
-        ) : !selectedLoginUser ? (
-          // ログインユーザー選択画面
+        ) : !selectedLoginBranch ? (
+          // ログイン教室選択画面
           <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-300 border border-slate-200 z-10">
             <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30">
               <Library className="text-white w-8 h-8" />
             </div>
             <h1 className="text-2xl font-black text-center mb-2 text-slate-800 tracking-tight">SEIKI Portal</h1>
-            <p className="text-center text-slate-500 text-sm mb-8 font-medium">登録済みメンバーから選択してログイン</p>
+            <p className="text-center text-slate-500 text-sm mb-8 font-medium">所属教室を選択してください</p>
             <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-              {members.map(u => (
+              {Array.from(new Set(members.map(u => u.branch))).map(branch => (
+                <button 
+                  key={branch} onClick={() => setSelectedLoginBranch(branch)} 
+                  className="w-full p-4 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 text-left flex justify-between items-center transition-all group shadow-sm hover:shadow-md"
+                >
+                  <div className="font-black text-slate-800 group-hover:text-blue-800 text-base flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-slate-400 group-hover:text-blue-500"/> {branch}
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500"/>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : !selectedLoginUser ? (
+          // ログインユーザー選択画面
+          <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in duration-300 border border-slate-200 z-10">
+            <button onClick={() => setSelectedLoginBranch(null)} className="mb-4 text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors">
+              <ChevronLeft className="w-4 h-4"/> 教室選択に戻る
+            </button>
+            <h1 className="text-2xl font-black text-center mb-2 text-slate-800 tracking-tight">{selectedLoginBranch}</h1>
+            <p className="text-center text-slate-500 text-sm mb-8 font-medium">あなたのお名前を選択してください</p>
+            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+              {members.filter(u => u.branch === selectedLoginBranch).map(u => (
                 <button 
                   key={u.id} onClick={() => setSelectedLoginUser(u)} 
                   className="w-full p-4 border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 text-left flex justify-between items-center transition-all group shadow-sm hover:shadow-md"
                 >
-                  <div>
-                    <div className="font-black text-slate-800 group-hover:text-blue-800 text-base">{u.name} <span className="text-xs font-normal text-slate-500 ml-1">さん</span></div>
-                    <div className="text-xs font-bold text-slate-500 mt-1.5 flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400"/> {u.branch}
-                    </div>
-                  </div>
+                  <div className="font-black text-slate-800 group-hover:text-blue-800 text-base">{u.name} <span className="text-xs font-normal text-slate-500 ml-1">さん</span></div>
                   <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2.5 py-1.5 rounded-lg group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
-                    {u.role}
+                    {u.role || '未設定'}
                   </span>
                 </button>
               ))}
@@ -746,7 +860,7 @@ export default function IntegratedPortal() {
                 </div>
                 <div className="min-w-0">
                   <div className="font-black text-slate-800 truncate">{selectedLoginUser.name}</div>
-                  <div className="text-xs text-slate-500 truncate">{selectedLoginUser.branch} / {selectedLoginUser.role}</div>
+                  <div className="text-xs text-slate-500 truncate">{selectedLoginUser.branch} / {selectedLoginUser.role || '-'}</div>
                 </div>
               </div>
               
@@ -770,7 +884,7 @@ export default function IntegratedPortal() {
                   {loginError && <p className="text-red-500 text-xs font-bold mt-2">{loginError}</p>}
                 </div>
                 <div className="flex gap-3">
-                  <button type="button" onClick={() => {setSelectedLoginUser(null); setLoginPassword(''); setLoginError('');}} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors">キャンセル</button>
+                  <button type="button" onClick={() => {setSelectedLoginUser(null); setLoginPassword(''); setLoginError('');}} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors">戻る</button>
                   <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition-colors active:scale-95">ログイン</button>
                 </div>
               </form>
@@ -801,9 +915,9 @@ export default function IntegratedPortal() {
         <div className="flex-1 overflow-y-auto flex flex-col">
           <div className="p-4 space-y-6 flex-1">
             
-            {/* ユーザー情報と招待ボタン */}
+            {/* ユーザー情報と設定・招待ボタン */}
             <div className="flex flex-col gap-1 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-              <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-200 transition-colors p-2 rounded-lg" onClick={() => setCurrentUser(null)} title="クリックでログアウト">
+              <div className="flex items-center gap-3 p-2 rounded-lg">
                 <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-lg shadow-inner flex-shrink-0">
                   {currentUser.name[0]}
                 </div>
@@ -812,9 +926,17 @@ export default function IntegratedPortal() {
                   <div className="text-[10px] font-bold text-slate-500 truncate">{currentUser.branch}</div>
                 </div>
               </div>
-              <div className="border-t border-slate-200 mt-1 pt-2 px-1">
-                <button onClick={() => setIsInviteModalOpen(true)} className="w-full py-1.5 flex items-center justify-center gap-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
-                  <UserPlus className="w-4 h-4" /> メンバーを招待
+              <div className="border-t border-slate-200 mt-1 pt-2 px-1 flex flex-col gap-1">
+                <button onClick={() => setIsPasswordModalOpen(true)} className="w-full py-1.5 flex items-center justify-center gap-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
+                  <Lock className="w-3.5 h-3.5" /> パスワードを変更
+                </button>
+                {currentUser?.role === '管理者' && (
+                  <button onClick={() => setIsInviteModalOpen(true)} className="w-full py-1.5 flex items-center justify-center gap-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
+                    <UserPlus className="w-4 h-4" /> メンバーを招待
+                  </button>
+                )}
+                <button onClick={() => setCurrentUser(null)} className="w-full py-1.5 flex items-center justify-center gap-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <LogOut className="w-3.5 h-3.5" /> ログアウト
                 </button>
               </div>
             </div>
@@ -834,7 +956,7 @@ export default function IntegratedPortal() {
             {/* 各種フィルター */}
             <div className="border-t border-slate-200 pt-4">
               <button onClick={() => toggleSection('area_branch')} className="w-full flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5"/>エリア・教室</span>
+                <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5"/>エリア・教室で探す</span>
                 {expandedSections.area_branch ? <ChevronDown className="w-3 h-3"/> : <ChevronRightIcon className="w-3 h-3"/>}
               </button>
               {expandedSections.area_branch && (
@@ -893,16 +1015,28 @@ export default function IntegratedPortal() {
             </div>
             <div>
               <button onClick={() => toggleSection('category')} className="w-full flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                 <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5"/>教務関連カテゴリー</span>
+                 <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5"/>教務関連カテゴリで探す</span>
                 {expandedSections.category ? <ChevronDown className="w-3 h-3"/> : <ChevronRightIcon className="w-3 h-3"/>}
               </button>
               {expandedSections.category && (
-                <div className="flex flex-col gap-1.5 ml-1 pl-2">
-                  {settings.categories.map(c => (
-                    <label key={c} className="flex items-center gap-2 cursor-pointer group">
-                      <input type="checkbox" checked={filters.categories.includes(c)} onChange={() => toggleFilter('categories', c)} className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                      <span className={`text-sm transition-colors ${filters.categories.includes(c) ? 'text-blue-700 font-bold' : 'text-slate-600 group-hover:text-blue-600'}`}>{c}</span>
-                    </label>
+                <div className="space-y-4 ml-1 pl-2">
+                  {settings.categories.map(cat => (
+                    <div key={cat.name} className="space-y-1">
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" checked={filters.categories.includes(cat.name)} onChange={() => toggleFilter('categories', cat.name)} className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className={`text-sm font-bold transition-colors ${filters.categories.includes(cat.name) ? 'text-blue-700' : 'text-slate-700 group-hover:text-blue-600'}`}>{cat.name}</span>
+                      </label>
+                      {cat.subcategories && cat.subcategories.length > 0 && (
+                        <div className="space-y-1 ml-5 border-l-2 border-slate-100 pl-2">
+                          {cat.subcategories.map(sub => (
+                            <label key={sub} className="flex items-center gap-2 cursor-pointer group">
+                              <input type="checkbox" checked={filters.subCategories.includes(sub)} onChange={() => toggleFilter('subCategories', sub)} className="w-3 h-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                              <span className={`text-xs transition-colors ${filters.subCategories.includes(sub) ? 'text-blue-700 font-bold' : 'text-slate-600 group-hover:text-blue-600'}`}>{sub}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -913,9 +1047,14 @@ export default function IntegratedPortal() {
              <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">マニュアル・資料庫</h3>
              <button 
               onClick={() => { setFilters(prev => ({...prev, quick: 'manual'})); activateMainView('manuals'); }}
-              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors mb-4 ${viewMode === 'manuals' ? 'bg-amber-100 text-amber-800 shadow-sm border border-amber-200' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+              disabled={hasKyomuFilter}
+              className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors mb-4 
+                ${hasKyomuFilter ? 'opacity-50 cursor-not-allowed bg-slate-100 text-slate-400 border border-slate-200' : 
+                  viewMode === 'manuals' ? 'bg-amber-100 text-amber-800 shadow-sm border border-amber-200' : 
+                  'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'}`}
+              title={hasKyomuFilter ? "教務情報のフィルターを選択中は開けません" : ""}
             >
-              <Library className="w-4 h-4 text-amber-600" /> マニュアル・資料
+              <Library className={`w-4 h-4 ${hasKyomuFilter ? 'text-slate-400' : 'text-amber-600'}`} /> マニュアル・資料
             </button>
             <div>
               <button onClick={() => toggleSection('manualCategory')} className="w-full flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -954,7 +1093,9 @@ export default function IntegratedPortal() {
             </div>
           </div>
           <div className="flex items-center gap-2 ml-4 pl-4">
-            <button onClick={() => setIsOrgSettingsOpen(true)} className="p-2 text-slate-400 hover:text-slate-700 transition-colors" title="各種設定"><Settings className="w-5 h-5" /></button>
+            {currentUser?.role === '管理者' && (
+              <button onClick={() => setIsOrgSettingsOpen(true)} className="p-2 text-slate-400 hover:text-slate-700 transition-colors" title="各種設定"><Settings className="w-5 h-5" /></button>
+            )}
             <button onClick={() => setIsTaskModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-full text-sm font-bold flex items-center gap-1 shadow-sm transition-colors ml-2"><Plus className="w-4 h-4" /> 投稿を作成</button>
           </div>
         </header>
@@ -1073,7 +1214,9 @@ export default function IntegratedPortal() {
                     <div className="flex bg-slate-200/70 p-1 rounded-lg border border-slate-200">
                       <button onClick={() => activateMainView('list')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${viewMode === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><List className="w-3.5 h-3.5"/> 一覧</button>
                       <button onClick={() => activateMainView('board')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${viewMode === 'board' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><LayoutGrid className="w-3.5 h-3.5"/> ボード</button>
-                      <button onClick={() => activateMainView('manuals')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${viewMode === 'manuals' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Library className="w-3.5 h-3.5"/> 資料</button>
+                      {!hasKyomuFilter && (
+                        <button onClick={() => activateMainView('manuals')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-all ${viewMode === 'manuals' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Library className="w-3.5 h-3.5"/> 資料</button>
+                      )}
                     </div>
                   </div>
 
@@ -1090,7 +1233,9 @@ export default function IntegratedPortal() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
                                   {!isRead && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
-                                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{item.category}</span>
+                                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {item.category}{item.subCategory ? ` > ${item.subCategory}` : ''}
+                                  </span>
                                   <span className="text-xs font-bold text-slate-400">{item.branch}</span>
                                 </div>
                                 <h3 className={`text-sm font-bold truncate ${isRead ? 'text-slate-500' : 'text-slate-800'}`}>{item.title}</h3>
@@ -1099,9 +1244,11 @@ export default function IntegratedPortal() {
                                 <div className="text-xs font-bold text-slate-500">{item.author}</div>
                                 {item.dueDate && <div className="text-[10px] font-bold text-red-500 mt-1">締切: {item.dueDate}</div>}
                               </div>
-                              <div className="flex items-center gap-3 pl-4 border-l border-slate-100 ml-2">
-                                <button onClick={(e) => { e.stopPropagation(); confirmDeletePost(item.id); }} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4"/></button>
-                              </div>
+                              {(currentUser.role === '管理者' || item.author === currentUser.name) && (
+                                <div className="flex items-center gap-3 pl-4 border-l border-slate-100 ml-2">
+                                  <button onClick={(e) => { e.stopPropagation(); confirmDeletePost(item.id); }} className="text-slate-300 hover:text-red-500 transition-colors p-1"><Trash2 className="w-4 h-4"/></button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1127,7 +1274,7 @@ export default function IntegratedPortal() {
                       </div>
                     )}
 
-                    {viewMode === 'manuals' && (
+                    {viewMode === 'manuals' && !hasKyomuFilter && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredItems.map(item => (
                           <ItemCard key={item.id} item={item} currentUser={currentUser} onSelect={setSelectedItemId} onToggleBookmark={handleToggleBookmark} onDelete={confirmDeletePost} />
@@ -1242,7 +1389,9 @@ export default function IntegratedPortal() {
                 <span className={`px-2 py-1 rounded text-xs font-bold text-white ${selectedItem.type==='urgent'?'bg-red-500': selectedItem.type==='task'?'bg-teal-500': selectedItem.type==='manual'?'bg-amber-500':'bg-blue-500'}`}>
                   {selectedItem.type === 'urgent' ? '緊急' : selectedItem.type === 'task' ? 'タスク' : selectedItem.type === 'manual' ? 'マニュアル' : '情報共有'}
                 </span>
-                <span className="text-sm font-bold text-slate-500">{selectedItem.category}</span>
+                <span className="text-sm font-bold text-slate-500">
+                  {selectedItem.category}{selectedItem.subCategory ? ` > ${selectedItem.subCategory}` : ''}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => handleToggleBookmark(selectedItem.id)} className={`p-2 rounded-full transition-colors ${selectedItem.bookmarkedBy?.includes(currentUser.id) ? 'bg-amber-50 text-amber-500' : 'hover:bg-slate-200 text-slate-400'}`} title="お気に入り">
@@ -1342,15 +1491,15 @@ export default function IntegratedPortal() {
               <form id="add-form" onSubmit={handleAddTask} className="p-6 space-y-6">
                 <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-xl w-fit">
                   <label className={`flex items-center gap-1.5 text-sm font-bold cursor-pointer px-4 py-2 rounded-lg transition-all ${newTask.type === 'task' ? 'bg-white shadow text-blue-700 ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
-                    <input type="radio" name="type" value="task" checked={newTask.type === 'task'} onChange={() => setNewTask({...newTask, type: 'task', selectedTargets: [], category: settings.categories[0]})} className="hidden" />
+                    <input type="radio" name="type" value="task" checked={newTask.type === 'task'} onChange={() => setNewTask({...newTask, type: 'task', selectedTargets: [], category: settings.categories[0]?.name || "通常授業", subCategory: ""})} className="hidden" />
                     <CheckSquare className="w-4 h-4" /> タスク（担当割当）
                   </label>
                   <label className={`flex items-center gap-1.5 text-sm font-bold cursor-pointer px-4 py-2 rounded-lg transition-all ${newTask.type === 'info' ? 'bg-white shadow text-blue-700 ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
-                    <input type="radio" name="type" value="info" checked={newTask.type === 'info'} onChange={() => setNewTask({...newTask, type: 'info', assignee: "-", selectedTargets: [], category: settings.categories[0]})} className="hidden" />
+                    <input type="radio" name="type" value="info" checked={newTask.type === 'info'} onChange={() => setNewTask({...newTask, type: 'info', assignee: "-", selectedTargets: [], category: settings.categories[0]?.name || "通常授業", subCategory: ""})} className="hidden" />
                     <Bell className="w-4 h-4" /> 情報共有
                   </label>
                   <label className={`flex items-center gap-1.5 text-sm font-bold cursor-pointer px-4 py-2 rounded-lg transition-all ${newTask.type === 'manual' ? 'bg-white shadow text-amber-700 ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}>
-                    <input type="radio" name="type" value="manual" checked={newTask.type === 'manual'} onChange={() => setNewTask({...newTask, type: 'manual', assignee: "-", selectedTargets: [], category: settings.manualCategories[0]})} className="hidden" />
+                    <input type="radio" name="type" value="manual" checked={newTask.type === 'manual'} onChange={() => setNewTask({...newTask, type: 'manual', assignee: "-", selectedTargets: [], category: settings.manualCategories[0], subCategory: ""})} className="hidden" />
                     <FileText className="w-4 h-4" /> マニュアル・資料
                   </label>
                 </div>
@@ -1496,15 +1645,32 @@ export default function IntegratedPortal() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">カテゴリー <span className="text-red-500">*</span></label>
-                    <select required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white" value={newTask.category} onChange={e => setNewTask({...newTask, category: e.target.value})}>
-                      {newTask.type === 'manual' ? settings.manualCategories.map(c => <option key={c} value={c}>{c}</option>) : settings.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    <select required className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white" value={newTask.category} onChange={e => setNewTask({...newTask, category: e.target.value, subCategory: ""})}>
+                      {newTask.type === 'manual' ? settings.manualCategories.map(c => <option key={c} value={c}>{c}</option>) : settings.categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
+                  {newTask.type !== 'manual' && settings.categories.find(c => c.name === newTask.category)?.subcategories?.length > 0 ? (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">サブカテゴリー</label>
+                      <select className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white" value={newTask.subCategory} onChange={e => setNewTask({...newTask, subCategory: e.target.value})}>
+                        <option value="">設定しない（任意）</option>
+                        {settings.categories.find(c => c.name === newTask.category).subcategories.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">期日・締切</label>
+                      <input type="date" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white" value={newTask.dueDate} onChange={e => setNewTask({...newTask, dueDate: e.target.value})} />
+                    </div>
+                  )}
+                </div>
+                
+                {newTask.type !== 'manual' && settings.categories.find(c => c.name === newTask.category)?.subcategories?.length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">期日・締切</label>
                     <input type="date" className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white" value={newTask.dueDate} onChange={e => setNewTask({...newTask, dueDate: e.target.value})} />
                   </div>
-                </div>
+                )}
               </form>
             </div>
             
@@ -1560,11 +1726,12 @@ export default function IntegratedPortal() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">役割・役職 <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">役割・役職</label>
                 <select 
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white transition-colors"
                   value={newUserRole} onChange={e => setNewUserRole(e.target.value)}
                 >
+                  <option value="">設定しない（空欄）</option>
                   <option value="スタッフ">スタッフ</option>
                   <option value="教室長">教室長</option>
                   <option value="管理者">管理者</option>
@@ -1582,6 +1749,31 @@ export default function IntegratedPortal() {
         </div>
       )}
 
+      {/* ＝＝＝ パスワード変更モーダル ＝＝＝ */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+            <h2 className="font-black text-lg text-slate-800 mb-4 flex items-center gap-2"><Lock className="w-5 h-5 text-slate-400" />パスワードの変更</h2>
+            <form onSubmit={handlePasswordChange}>
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-slate-700 mb-2">新しいパスワードを入力</label>
+                <input 
+                  type="text" required autoFocus
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:border-blue-500 outline-none bg-slate-50 focus:bg-white"
+                  value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  placeholder="新しいパスワード"
+                />
+                <p className="text-[10px] text-slate-500 mt-2">※パスワードはシステム管理者のみ確認可能です。</p>
+              </div>
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">キャンセル</button>
+                <button type="submit" className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md">変更を保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ＝＝＝ 各種設定モーダル ＝＝＝ */}
       {isOrgSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
@@ -1592,8 +1784,9 @@ export default function IntegratedPortal() {
             </div>
             
             <div className="flex flex-1 overflow-hidden">
-              <div className="w-52 bg-slate-50 border-r border-slate-200 p-2 flex flex-col gap-1 flex-shrink-0">
+              <div className="w-52 bg-slate-50 border-r border-slate-200 p-2 flex flex-col gap-1 flex-shrink-0 overflow-y-auto">
                 <button onClick={() => setSettingsTab('org')} className={`px-3 py-2.5 rounded-md text-sm font-bold text-left transition-colors flex items-center gap-2 ${settingsTab === 'org' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-600 hover:bg-slate-100'}`}><MapPin className="w-4 h-4"/> 組織・スタッフ管理</button>
+                <button onClick={() => setSettingsTab('members')} className={`px-3 py-2.5 rounded-md text-sm font-bold text-left transition-colors flex items-center gap-2 ${settingsTab === 'members' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-600 hover:bg-slate-100'}`}><User className="w-4 h-4"/> メンバー管理（PW確認）</button>
                 <button onClick={() => setSettingsTab('grade')} className={`px-3 py-2.5 rounded-md text-sm font-bold text-left transition-colors flex items-center gap-2 ${settingsTab === 'grade' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-600 hover:bg-slate-100'}`}><GraduationCap className="w-4 h-4"/> 学年一覧管理</button>
                 <button onClick={() => setSettingsTab('course')} className={`px-3 py-2.5 rounded-md text-sm font-bold text-left transition-colors flex items-center gap-2 ${settingsTab === 'course' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-600 hover:bg-slate-100'}`}><Users className="w-4 h-4"/> コース一覧管理</button>
                 <button onClick={() => setSettingsTab('category')} className={`px-3 py-2.5 rounded-md text-sm font-bold text-left transition-colors flex items-center gap-2 ${settingsTab === 'category' ? 'bg-white text-blue-600 shadow-sm border border-slate-200' : 'text-slate-600 hover:bg-slate-100'}`}><Tag className="w-4 h-4"/> 情報カテゴリー管理</button>
@@ -1601,6 +1794,78 @@ export default function IntegratedPortal() {
               </div>
 
               <div className="flex-1 p-6 overflow-y-auto">
+                {settingsTab === 'members' && (
+                  <div className="space-y-4">
+                    <p className="text-sm font-bold text-slate-600">全メンバーのアカウント情報とパスワードの確認・編集・削除が行えます。</p>
+                    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm overflow-x-auto">
+                      <table className="w-full text-sm text-left min-w-[600px]">
+                        <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                          <tr>
+                            <th className="px-4 py-3 whitespace-nowrap">名前</th>
+                            <th className="px-4 py-3 whitespace-nowrap">所属教室</th>
+                            <th className="px-4 py-3 whitespace-nowrap">役職</th>
+                            <th className="px-4 py-3 whitespace-nowrap">パスワード</th>
+                            <th className="px-4 py-3 text-center whitespace-nowrap w-[100px]">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {members.map(m => (
+                            editingMemberId === m.id ? (
+                              <tr key={m.id} className="bg-blue-50/50">
+                                <td className="px-4 py-2">
+                                  <input type="text" className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" value={editMemberForm.name} onChange={e => setEditMemberForm({...editMemberForm, name: e.target.value})} placeholder="氏名" />
+                                </td>
+                                <td className="px-4 py-2">
+                                  <select className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={editMemberForm.branch} onChange={e => setEditMemberForm({...editMemberForm, branch: e.target.value})}>
+                                    <option value="全教室">全教室</option>
+                                    {settings.orgData.map(area => (
+                                      <optgroup key={area.name} label={area.name}>
+                                        {area.branches.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-4 py-2">
+                                  <select className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" value={editMemberForm.role} onChange={e => setEditMemberForm({...editMemberForm, role: e.target.value})}>
+                                    <option value="">設定しない（空欄）</option>
+                                    <option value="スタッフ">スタッフ</option>
+                                    <option value="教室長">教室長</option>
+                                    <option value="管理者">管理者</option>
+                                  </select>
+                                </td>
+                                <td className="px-4 py-2">
+                                  <input type="text" className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" value={editMemberForm.password} onChange={e => setEditMemberForm({...editMemberForm, password: e.target.value})} placeholder="パスワード" />
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <div className="flex justify-center gap-1">
+                                    <button onClick={() => handleUpdateMember(m.id, m, editMemberForm)} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="保存"><Save className="w-4 h-4"/></button>
+                                    <button onClick={() => setEditingMemberId(null)} className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 transition-colors" title="キャンセル"><X className="w-4 h-4"/></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : (
+                              <tr key={m.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-4 py-3 font-bold text-slate-800">{m.name}</td>
+                                <td className="px-4 py-3 text-slate-600">{m.branch}</td>
+                                <td className="px-4 py-3 text-slate-600">
+                                  {m.role ? <span className="bg-slate-100 px-2 py-1 rounded text-xs">{m.role}</span> : <span className="text-slate-400 italic">未設定</span>}
+                                </td>
+                                <td className="px-4 py-3 font-mono font-bold text-blue-600">{m.password}</td>
+                                <td className="px-4 py-3 text-center">
+                                   <div className="flex justify-center gap-1">
+                                     <button onClick={() => { setEditingMemberId(m.id); setEditMemberForm({ name: m.name, branch: m.branch, role: m.role || '', password: m.password }); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="編集"><Pencil className="w-4 h-4"/></button>
+                                     <button onClick={() => handleDeleteMember(m.id, m.name, m.branch)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="削除"><Trash2 className="w-4 h-4"/></button>
+                                   </div>
+                                </td>
+                              </tr>
+                            )
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {settingsTab === 'org' && (
                   <div className="space-y-6">
                     <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex gap-3">
@@ -1702,12 +1967,35 @@ export default function IntegratedPortal() {
                       <input type="text" placeholder="新しいカテゴリー名" className="flex-1 px-3 py-2 border border-slate-300 rounded text-sm focus:border-blue-500 outline-none" value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} />
                       <button onClick={handleAddCategory} className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold whitespace-nowrap hover:bg-blue-700">カテゴリーを追加</button>
                     </div>
-                    <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap gap-2">
+                    <div className="space-y-4">
                       {settings.categories.map(cat => (
-                        <div key={cat} className="bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg flex items-center gap-2 group">
-                          <Tag className="w-3.5 h-3.5 text-indigo-400" />
-                          <span className="text-sm font-bold text-indigo-800">{cat}</span>
-                          <button onClick={() => handleDeleteCategory(cat)} className="text-indigo-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 className="w-3.5 h-3.5"/></button>
+                        <div key={cat.name} className="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                          <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-200 flex justify-between items-center">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Tag className="w-4 h-4 text-slate-400"/> {cat.name}</h3>
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => setAddingSubCategoryTo(addingSubCategoryTo === cat.name ? null : cat.name)} className="text-xs font-bold text-blue-600 hover:underline">+ サブカテゴリ追加</button>
+                              <button onClick={() => handleDeleteCategory(cat.name)} className="text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                            </div>
+                          </div>
+
+                          {addingSubCategoryTo === cat.name && (
+                            <div className="p-3 bg-blue-50/50 border-b border-slate-100 flex gap-2">
+                              <input type="text" placeholder="サブカテゴリ名" className="flex-1 px-3 py-1.5 border border-slate-300 rounded text-xs" value={newSubCategoryName} onChange={e => setNewSubCategoryName(e.target.value)} />
+                              <button onClick={() => handleAddSubCategory(cat.name)} className="bg-blue-600 text-white px-4 py-1.5 rounded text-xs font-bold">追加</button>
+                            </div>
+                          )}
+
+                          <div className="p-3">
+                            <div className="flex flex-wrap gap-1.5">
+                              {cat.subcategories?.map(sub => (
+                                <span key={sub} className="bg-white border border-slate-200 text-slate-600 text-xs px-2.5 py-1 rounded-md flex items-center gap-1.5 group">
+                                  {sub}
+                                  <button onClick={() => handleDeleteSubCategory(cat.name, sub)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1"><X className="w-3 h-3"/></button>
+                                </span>
+                              ))}
+                              {(!cat.subcategories || cat.subcategories.length === 0) && <span className="text-xs text-slate-400 italic">サブカテゴリはありません</span>}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1753,4 +2041,3 @@ export default function IntegratedPortal() {
     </div>
   );
 }
-
