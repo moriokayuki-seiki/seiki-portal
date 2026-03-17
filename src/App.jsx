@@ -17,7 +17,7 @@ const getFirebaseConfig = () => {
   if (typeof __firebase_config !== 'undefined') {
     return JSON.parse(__firebase_config);
   }
-  return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
+    return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
 };
 
 const firebaseConfig = getFirebaseConfig();
@@ -61,7 +61,7 @@ const RULES_TEXT = [
 ];
 
 // ==========================================
-// 3. UIコンポーネント群
+// 3. UIコンポーネント群・補助関数
 // ==========================================
 
 const ToastContainer = ({ toasts }) => (
@@ -88,6 +88,79 @@ const formatYMD = (date) => {
   return `${y}-${m}-${d}`;
 };
 
+const getDayOfWeek = (dateStr) => {
+  if (!dateStr) return '';
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  const d = new Date(dateStr);
+  return days[d.getDay()];
+};
+
+const formatDateWithDay = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return `${y}年${m}月${d}日 (${getDayOfWeek(dateStr)})`;
+};
+
+const formatDateTimeWithDay = (date) => {
+  if (!date) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  const day = days[date.getDay()];
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${y}年${m}月${d}日 (${day}) ${h}:${min}`;
+};
+
+// カスタムカレンダーポップアップ
+const DatePickerPopup = ({ currentDateStr, onSelect, onClose }) => {
+  const [viewDate, setViewDate] = useState(new Date(currentDateStr || new Date()));
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  
+  const days = Array(firstDay).fill(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+  return (
+    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-[200] w-72">
+      <div className="flex justify-between items-center mb-4">
+        <button onClick={(e) => { e.preventDefault(); setViewDate(new Date(year, month - 1, 1)); }} className="p-1 hover:bg-slate-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+        <span className="font-bold text-slate-800">{year}年 {month + 1}月</span>
+        <button onClick={(e) => { e.preventDefault(); setViewDate(new Date(year, month + 1, 1)); }} className="p-1 hover:bg-slate-100 rounded-full"><ChevronRight className="w-5 h-5"/></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+        {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => <div key={d} className={`text-xs font-bold ${i===0?'text-red-400':i===6?'text-blue-400':'text-slate-400'}`}>{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((d, i) => {
+          if (!d) return <div key={i} className="h-8"></div>;
+          const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const isSelected = dateStr === currentDateStr;
+          const isToday = dateStr === formatYMD(new Date());
+          return (
+            <button 
+              key={i} 
+              onClick={(e) => { e.preventDefault(); onSelect(dateStr); onClose(); }}
+              className={`h-8 rounded-full text-sm font-bold flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 text-white' : isToday ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-100 text-slate-700'}`}
+            >
+              {d}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between">
+         <button onClick={(e) => { e.preventDefault(); onSelect(formatYMD(new Date())); onClose(); }} className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors">今日</button>
+         <button onClick={(e) => { e.preventDefault(); onClose(); }} className="text-xs font-bold text-slate-500 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition-colors">閉じる</button>
+      </div>
+    </div>
+  );
+};
+
 // ==========================================
 // 4. メインアプリケーション
 // ==========================================
@@ -108,6 +181,7 @@ export default function ChikyukanTaskSystem() {
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, message: '', onConfirm: null });
 
   const [routineDate, setRoutineDate] = useState(formatYMD(new Date()));
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [selectedNewRoutine, setSelectedNewRoutine] = useState(null);
   const [routineForm, setRoutineForm] = useState({
     action: 'request',
@@ -291,7 +365,7 @@ export default function ChikyukanTaskSystem() {
     }
   };
 
-  // ファイルアップロードの汎用ハンドラ（複数対応・750KB制限に変更）
+  // ファイルアップロードの汎用ハンドラ（複数対応・750KB制限）
   const handleMultipleFilesUpload = (e, setter, key = null) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -683,6 +757,14 @@ export default function ChikyukanTaskSystem() {
           {/* --- ダッシュボード --- */}
           {viewMode === 'dashboard' && (
             <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in">
+              <div className="text-center bg-white rounded-2xl shadow-sm border border-slate-200 py-6">
+                <div className="text-slate-500 font-bold mb-2 flex items-center justify-center gap-2">
+                  <CalendarIcon className="w-5 h-5" /> 本日の日付
+                </div>
+                <h2 className="text-3xl md:text-4xl font-black text-blue-800 tracking-widest">
+                  {formatDateWithDay(formatYMD(new Date()))}
+                </h2>
+              </div>
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex items-center gap-3"><User className="w-6 h-6 text-amber-600" /><h3 className="text-amber-800 font-black text-lg">アルバイトとしての心得</h3></div>
                 <div className="p-6">
@@ -720,7 +802,7 @@ export default function ChikyukanTaskSystem() {
                               </div>
                               <div className="flex gap-3 text-xs text-slate-500">
                                 <span>実施: <strong className="text-slate-700">{task.assignee}</strong></span>
-                                <span>完了日時: {new Date(task.createdAt?.toMillis?.() || Date.now()).toLocaleString('ja-JP')}</span>
+                                <span>完了日時: {formatDateTimeWithDay(new Date(task.createdAt?.toMillis?.() || Date.now()))}</span>
                               </div>
                             </div>
                             <button onClick={() => handleArchiveTask(task.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2 rounded-lg transition-colors whitespace-nowrap">確認済みにする</button>
@@ -739,15 +821,33 @@ export default function ChikyukanTaskSystem() {
           {/* --- ルーティンチェック（カレンダー形式） --- */}
           {viewMode === 'routine' && (
             <div className="max-w-4xl mx-auto animate-in fade-in h-full flex flex-col">
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6 flex items-center justify-between px-6 py-4 flex-shrink-0">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row items-center justify-between px-6 py-4 flex-shrink-0 gap-4">
                 <div className="flex items-center gap-4">
                   <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><ChevronLeft className="w-5 h-5 text-slate-600"/></button>
-                  <h2 className="text-xl font-black text-slate-800 tracking-wider w-40 text-center">
-                    {routineDate.split('-')[0]}年{routineDate.split('-')[1]}月{routineDate.split('-')[2]}日
-                  </h2>
+                  <div className="relative flex items-center justify-center min-w-[200px] hover:bg-slate-50 rounded-xl transition-colors p-2 group">
+                    <button 
+                      onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
+                      className="flex items-center gap-2 outline-none"
+                    >
+                      <h2 className="text-2xl md:text-3xl font-black text-blue-800 tracking-wider text-center flex items-center gap-2 group-hover:text-blue-600 transition-colors">
+                        <CalendarIcon className="w-6 h-6 text-blue-500" />
+                        {formatDateWithDay(routineDate)}
+                      </h2>
+                    </button>
+                    {isDatePickerOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[190]" onClick={() => setIsDatePickerOpen(false)}></div>
+                        <DatePickerPopup 
+                          currentDateStr={routineDate} 
+                          onSelect={setRoutineDate} 
+                          onClose={() => setIsDatePickerOpen(false)} 
+                        />
+                      </>
+                    )}
+                  </div>
                   <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><ChevronRight className="w-5 h-5 text-slate-600"/></button>
                 </div>
-                <button onClick={() => setRoutineDate(formatYMD(new Date()))} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors">今日に戻る</button>
+                <button onClick={() => setRoutineDate(formatYMD(new Date()))} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors whitespace-nowrap">今日に戻る</button>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex-1 overflow-y-auto">
@@ -815,7 +915,7 @@ export default function ChikyukanTaskSystem() {
                           )}
                         </div>
                         <h4 className="text-sm font-bold text-slate-800 mb-2 leading-tight">{task.title}</h4>
-                        {task.dueDate && status !== 'done' && <div className="text-[10px] font-bold text-red-500 mb-2 flex items-center gap-1"><CalendarIcon className="w-3 h-3"/> 締切: {task.dueDate}</div>}
+                        {task.dueDate && status !== 'done' && <div className="text-[10px] font-bold text-red-500 mb-2 flex items-center gap-1"><CalendarIcon className="w-3 h-3"/> 締切: {formatDateWithDay(task.dueDate)}</div>}
                         <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-100 pt-2 mt-auto">
                           <span>依頼: {task.author}</span>
                           {task.assignee ? <span className="bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded">担当: {task.assignee}</span> : <span>未担当</span>}
@@ -852,7 +952,7 @@ export default function ChikyukanTaskSystem() {
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusColor(task.status)}`}>{getStatusLabel(task.status)}</span>
                           <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold">{task.type === 'routine' ? 'ルーティン' : '特別タスク'}</span>
-                          <span className="text-xs text-slate-500">{task.targetDate ? `対象日: ${task.targetDate}` : task.dueDate ? `締切: ${task.dueDate}` : new Date(task.createdAt?.toMillis?.() || Date.now()).toLocaleDateString('ja-JP')}</span>
+                          <span className="text-xs text-slate-500">{task.targetDate ? `対象日: ${formatDateWithDay(task.targetDate)}` : task.dueDate ? `締切: ${formatDateWithDay(task.dueDate)}` : formatDateTimeWithDay(new Date(task.createdAt?.toMillis?.() || Date.now()))}</span>
                         </div>
                         <h4 className="font-bold text-slate-800 text-sm truncate group-hover:text-blue-700">{task.title}</h4>
                       </div>
@@ -1030,16 +1130,15 @@ export default function ChikyukanTaskSystem() {
                                   <td className="px-4 py-3">
                                     <div className="flex flex-col gap-1">
                                       {r.manualUrl && <a href={r.manualUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline truncate max-w-[200px] flex items-center gap-1"><BookOpen className="w-3 h-3"/> URLリンク</a>}
-                                      {r.attachedFile && <a href={r.attachedFile.data} download={r.attachedFile.name} className="text-[10px] text-teal-600 hover:underline truncate max-w-[200px] flex items-center gap-1"><File className="w-3 h-3"/> 添付ファイル ({r.attachedFile.name})</a>}
                                       {r.attachedFiles?.map((f, idx) => (
                                         <a key={idx} href={f.data} download={f.name} className="text-[10px] text-teal-600 hover:underline truncate max-w-[200px] flex items-center gap-1"><File className="w-3 h-3"/> 添付ファイル ({f.name})</a>
                                       ))}
-                                      {!r.manualUrl && !r.attachedFile && (!r.attachedFiles || r.attachedFiles.length === 0) && <span className="text-xs text-slate-400 italic">設定なし</span>}
+                                      {!r.manualUrl && (!r.attachedFiles || r.attachedFiles.length === 0) && <span className="text-xs text-slate-400 italic">設定なし</span>}
                                     </div>
                                   </td>
                                   <td className="px-4 py-3 text-center">
                                     <div className="flex justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={() => { setEditingRoutineId(r.id); setEditRoutineForm({ name: r.name, formType: r.formType, manualUrl: r.manualUrl || '', attachedFiles: r.attachedFiles || (r.attachedFile ? [r.attachedFile] : []) }); }} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg"><Edit3 className="w-4 h-4"/></button>
+                                      <button onClick={() => { setEditingRoutineId(r.id); setEditRoutineForm({ name: r.name, formType: r.formType, manualUrl: r.manualUrl || '', attachedFiles: r.attachedFiles || [] }); }} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg"><Edit3 className="w-4 h-4"/></button>
                                       <button onClick={() => handleDeleteRoutine(r.id)} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
                                     </div>
                                   </td>
@@ -1068,7 +1167,7 @@ export default function ChikyukanTaskSystem() {
             </div>
             
             <form onSubmit={handleCreateRoutineTask} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-              <div className="bg-slate-100 rounded-lg p-3 text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> 対象日: {routineDate}</div>
+              <div className="bg-slate-100 rounded-lg p-3 text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> 対象日: {formatDateWithDay(routineDate)}</div>
 
               {isEmployee && (
                 <div className="flex gap-4 border-b border-slate-100 pb-4">
@@ -1249,8 +1348,8 @@ export default function ChikyukanTaskSystem() {
                 </h2>
                 <div className="flex flex-wrap gap-2 text-xs text-slate-500 mb-4">
                   <span className="bg-slate-100 px-2 py-1 rounded">依頼: {selectedTask.author}</span>
-                  {selectedTask.targetDate && <span className="bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded">対象日: {selectedTask.targetDate}</span>}
-                  {selectedTask.dueDate && <span className="bg-red-50 text-red-600 font-bold px-2 py-1 rounded">締切: {selectedTask.dueDate}</span>}
+                  {selectedTask.targetDate && <span className="bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded">対象日: {formatDateWithDay(selectedTask.targetDate)}</span>}
+                  {selectedTask.dueDate && <span className="bg-red-50 text-red-600 font-bold px-2 py-1 rounded">締切: {formatDateWithDay(selectedTask.dueDate)}</span>}
                 </div>
                 {(selectedTask.targetGrades?.length > 0 || selectedTask.targetCourses?.length > 0) && (
                   <div className="flex flex-wrap gap-1.5 mb-4">
@@ -1267,16 +1366,11 @@ export default function ChikyukanTaskSystem() {
               )}
 
               {/* マニュアル・添付ファイル リンク */}
-              {(selectedTask.attachmentUrl || selectedTask.attachedFile || (selectedTask.attachedFiles && selectedTask.attachedFiles.length > 0)) && (
+              {(selectedTask.attachmentUrl || (selectedTask.attachedFiles && selectedTask.attachedFiles.length > 0)) && (
                 <div className="space-y-2">
                   {selectedTask.attachmentUrl && (
                     <a href={selectedTask.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-4 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold transition-colors border border-blue-200 shadow-sm text-sm">
                       <BookOpen className="w-5 h-5" /> 手順書・マニュアルを開く
-                    </a>
-                  )}
-                  {selectedTask.attachedFile && (
-                    <a href={selectedTask.attachedFile.data} download={selectedTask.attachedFile.name} className="flex items-center gap-2 w-full p-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm text-sm">
-                      <File className="w-5 h-5 text-slate-400" /> 指示の添付ファイル ({selectedTask.attachedFile.name})
                     </a>
                   )}
                   {selectedTask.attachedFiles?.map((file, idx) => (
@@ -1379,13 +1473,6 @@ export default function ChikyukanTaskSystem() {
                         </div>
                       )}
                       
-                      {selectedTask.reportFile && (
-                        <div className="mt-3 pt-3 border-t border-teal-100">
-                          <a href={selectedTask.reportFile.data} download={selectedTask.reportFile.name} className="flex items-center gap-1.5 text-teal-700 hover:text-teal-900 transition-colors font-bold text-xs bg-teal-50 p-2 rounded-lg border border-teal-200">
-                            <File className="w-4 h-4" /> 報告ファイル ({selectedTask.reportFile.name}) をダウンロード
-                          </a>
-                        </div>
-                      )}
                       {selectedTask.reportFiles?.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-teal-100 space-y-2">
                           <strong className="block text-teal-800 text-xs">報告の添付ファイル:</strong>
