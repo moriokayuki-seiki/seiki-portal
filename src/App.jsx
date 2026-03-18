@@ -40,8 +40,8 @@ const INITIAL_MEMBERS = [
   { name: '合路郁子', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
   { name: '亀井淳史', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
   { name: '杉村茉衣', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
-  { name: '森岡優希', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' }, 
- { name: '小髙みずき', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '森岡優希', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '小髙', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
   { name: 'アルバイト（共通）', branch: '知求館（北大路）', role: 'アルバイト', password: 'seiki' }
 ];
 
@@ -203,6 +203,9 @@ export default function ChikyukanTaskSystem() {
     title: '', type: 'special', dueDate: '',
     targetGrades: [], targetCourses: [], description: '', attachmentUrl: '', attachedFiles: []
   });
+  
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
 
   const [reportMemo, setReportMemo] = useState('');
   const [actualAssignee, setActualAssignee] = useState('');
@@ -412,7 +415,22 @@ export default function ChikyukanTaskSystem() {
   };
 
   const openTaskModal = () => {
+    setIsEditingTask(false);
+    setEditingTaskId(null);
     setTaskForm({ title: '', type: 'special', dueDate: '', targetGrades: [], targetCourses: [], description: '', attachmentUrl: '', attachedFiles: [] });
+    setIsTaskModalOpen(true);
+  };
+
+  const openEditTaskModal = (task) => {
+    setIsEditingTask(true);
+    setEditingTaskId(task.id);
+    setTaskForm({
+      title: task.title, type: task.type, dueDate: task.dueDate || '',
+      targetGrades: task.targetGrades || [], targetCourses: task.targetCourses || [],
+      description: task.description || '', attachmentUrl: task.attachmentUrl || '', 
+      attachedFiles: task.attachedFiles || (task.attachedFile ? [task.attachedFile] : [])
+    });
+    setSelectedTask(null);
     setIsTaskModalOpen(true);
   };
 
@@ -437,19 +455,28 @@ export default function ChikyukanTaskSystem() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const maxOrder = tasks.filter(t => t.status === 'todo').reduce((max, t) => Math.max(max, t.order || 0), 0);
-      const newTask = {
-        title: taskForm.title, type: 'special', author: currentUser.name, createdAt: serverTimestamp(),
-        dueDate: taskForm.dueDate, targetGrades: taskForm.targetGrades, targetCourses: taskForm.targetCourses,
-        description: taskForm.description, attachmentUrl: taskForm.attachmentUrl, attachedFiles: taskForm.attachedFiles || [],
-        status: 'todo', order: maxOrder + 1, assignee: null, reportMemo: '', comments: [], archived: false,
-        inventoryDetails: null, reportFiles: []
-      };
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), newTask);
+      if (isEditingTask && editingTaskId) {
+        const updates = {
+          title: taskForm.title, dueDate: taskForm.dueDate, targetGrades: taskForm.targetGrades, targetCourses: taskForm.targetCourses,
+          description: taskForm.description, attachmentUrl: taskForm.attachmentUrl, attachedFiles: taskForm.attachedFiles || []
+        };
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTaskId), updates);
+        showToast('特別タスクを更新しました');
+      } else {
+        const maxOrder = tasks.filter(t => t.status === 'todo').reduce((max, t) => Math.max(max, t.order || 0), 0);
+        const newTask = {
+          title: taskForm.title, type: 'special', author: currentUser.name, createdAt: serverTimestamp(),
+          dueDate: taskForm.dueDate, targetGrades: taskForm.targetGrades, targetCourses: taskForm.targetCourses,
+          description: taskForm.description, attachmentUrl: taskForm.attachmentUrl, attachedFiles: taskForm.attachedFiles || [],
+          status: 'todo', order: maxOrder + 1, assignee: null, reportMemo: '', comments: [], archived: false,
+          inventoryDetails: null, reportFiles: []
+        };
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), newTask);
+        showToast('特別タスクを発行しました');
+        if (viewMode !== 'special') setViewMode('special');
+      }
       setIsTaskModalOpen(false);
-      showToast('特別タスクを発行しました');
-      if (viewMode !== 'special') setViewMode('special');
-    } catch (e) { showToast('タスクの発行に失敗しました', 'error'); } finally { setIsSubmitting(false); }
+    } catch (e) { showToast('タスクの保存に失敗しました', 'error'); } finally { setIsSubmitting(false); }
   };
 
   const openNewRoutineModal = (routine) => {
@@ -1280,12 +1307,12 @@ export default function ChikyukanTaskSystem() {
         </div>
       )}
 
-      {/* ＝＝＝ 特別タスク作成モーダル ＝＝＝ */}
+      {/* ＝＝＝ 特別タスク作成・編集モーダル ＝＝＝ */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center pt-10 px-4 pb-4">
           <div className="bg-white rounded-t-2xl w-full max-w-2xl shadow-2xl animate-in slide-in-from-bottom-8 flex flex-col overflow-hidden h-full">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-amber-50 flex-shrink-0">
-              <h2 className="font-black text-lg text-amber-800 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> 特別・イレギュラータスクの発行</h2>
+              <h2 className="font-black text-lg text-amber-800 flex items-center gap-2"><AlertTriangle className="w-5 h-5"/> {isEditingTask ? '特別・イレギュラータスクの修正' : '特別・イレギュラータスクの発行'}</h2>
               <button onClick={() => setIsTaskModalOpen(false)} className="text-amber-700 hover:bg-amber-200 p-1.5 rounded-full"><X className="w-5 h-5"/></button>
             </div>
             <form onSubmit={handleCreateTask} className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
@@ -1338,7 +1365,7 @@ export default function ChikyukanTaskSystem() {
             </form>
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 flex-shrink-0">
               <button onClick={() => setIsTaskModalOpen(false)} disabled={isSubmitting} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-xl">キャンセル</button>
-              <button onClick={handleCreateTask} disabled={isSubmitting} className="px-8 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl shadow-md flex items-center justify-center min-w-[120px]">発行する</button>
+              <button onClick={handleCreateTask} disabled={isSubmitting} className="px-8 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl shadow-md flex items-center justify-center min-w-[120px]">{isEditingTask ? '更新する' : '発行する'}</button>
             </div>
           </div>
         </div>
@@ -1464,11 +1491,14 @@ export default function ChikyukanTaskSystem() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 pt-2 border-t border-slate-200">
-                      <button onClick={() => handleUpdateTaskStatus(selectedTask.id, 'pending')} className="flex-1 py-3 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg font-bold text-sm transition-colors border border-amber-300">
+                    <div className="flex gap-2 pt-2 border-t border-slate-200 flex-wrap">
+                      <button onClick={() => handleUpdateTaskStatus(selectedTask.id, 'todo')} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-sm transition-colors border border-slate-300 min-w-[100px]">
+                        未着手に戻す
+                      </button>
+                      <button onClick={() => handleUpdateTaskStatus(selectedTask.id, 'pending')} className="flex-1 py-3 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg font-bold text-sm transition-colors border border-amber-300 min-w-[100px]">
                         一旦保留にする
                       </button>
-                      <button onClick={handleCompleteTask} className="flex-[2] py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-sm shadow-md transition-colors flex justify-center items-center gap-1.5">
+                      <button onClick={handleCompleteTask} className="w-full sm:flex-[2] py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold text-sm shadow-md transition-colors flex justify-center items-center gap-1.5">
                         <CheckSquare className="w-4 h-4"/> 完了報告する
                       </button>
                     </div>
@@ -1504,17 +1534,27 @@ export default function ChikyukanTaskSystem() {
                       )}
 
                     </div>
-                    {isEmployee && (
-                      <button onClick={() => handleUpdateTaskStatus(selectedTask.id, 'in-progress')} className="text-xs font-bold text-slate-500 hover:underline">差し戻す（進行中に戻す）</button>
-                    )}
+                    
+                    <div className="mt-3 pt-3 border-t border-teal-200">
+                      <button onClick={() => handleUpdateTaskStatus(selectedTask.id, 'in-progress')} className="text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1">
+                        <ArrowUp className="w-3 h-3"/> 間違えて完了した場合はこちら（進行中に戻す）
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* 管理者用 削除ボタン */}
-              {isAdmin && (
-                <div className="border-t border-slate-100 pt-6 mt-6">
-                  <button onClick={() => handleDeleteTask(selectedTask.id)} className="text-sm font-bold text-red-500 flex items-center gap-1.5 hover:underline"><Trash2 className="w-4 h-4"/> このタスクを完全に削除する</button>
+              {/* 社員用 編集・削除ボタン */}
+              {isEmployee && (
+                <div className="border-t border-slate-100 pt-6 mt-6 flex flex-wrap gap-4 justify-between items-center">
+                  {selectedTask.type === 'special' ? (
+                    <button onClick={() => openEditTaskModal(selectedTask)} className="text-sm font-bold text-blue-600 flex items-center gap-1.5 hover:underline">
+                      <Edit3 className="w-4 h-4"/> タスク内容を修正する
+                    </button>
+                  ) : <div></div>}
+                  <button onClick={() => handleDeleteTask(selectedTask.id)} className="text-sm font-bold text-red-500 flex items-center gap-1.5 hover:underline ml-auto">
+                    <Trash2 className="w-4 h-4"/> このタスクを完全に削除する
+                  </button>
                 </div>
               )}
 
