@@ -17,8 +17,9 @@ const getFirebaseConfig = () => {
   if (typeof __firebase_config !== 'undefined') {
     return JSON.parse(__firebase_config);
   }
-    return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
+   return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
 };
+
 
 const firebaseConfig = getFirebaseConfig();
 const app = initializeApp(firebaseConfig);
@@ -1168,6 +1169,23 @@ export default function ChikyukanTaskSystem() {
             
             <form onSubmit={handleCreateRoutineTask} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
               <div className="bg-slate-100 rounded-lg p-3 text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> 対象日: {formatDateWithDay(routineDate)}</div>
+
+              {/* マニュアル・手順書エリア（追加部分） */}
+              {(selectedNewRoutine.manualUrl || (selectedNewRoutine.attachedFiles && selectedNewRoutine.attachedFiles.length > 0)) && (
+                <div className="space-y-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100 mb-4">
+                  <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> マニュアル・手順書</h4>
+                  {selectedNewRoutine.manualUrl && (
+                    <a href={selectedNewRoutine.manualUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                      <ExternalLink className="w-4 h-4" /> リンクを開く
+                    </a>
+                  )}
+                  {selectedNewRoutine.attachedFiles?.map((file, idx) => (
+                    <a key={idx} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                      <File className="w-4 h-4 text-blue-400" /> {file.name}
+                    </a>
+                  ))}
+                </div>
+              )}
 
               {isEmployee && (
                 <div className="flex gap-4 border-b border-slate-100 pb-4">
