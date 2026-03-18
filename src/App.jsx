@@ -17,9 +17,8 @@ const getFirebaseConfig = () => {
   if (typeof __firebase_config !== 'undefined') {
     return JSON.parse(__firebase_config);
   }
-   return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
+  return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
 };
-
 
 const firebaseConfig = getFirebaseConfig();
 const app = initializeApp(firebaseConfig);
@@ -189,7 +188,7 @@ export default function ChikyukanTaskSystem() {
     action: 'request',
     description: '', reportMemo: '', actualAssignee: '',
     inventoryDetails: { a3: '', a4: '', b4: '', b5: '' },
-    attachedFiles: [], reportFiles: []
+    attachmentLinks: [], attachedFiles: [], reportFiles: []
   });
 
   const [selectedLoginUser, setSelectedLoginUser] = useState(null);
@@ -201,7 +200,7 @@ export default function ChikyukanTaskSystem() {
 
   const [taskForm, setTaskForm] = useState({
     title: '', type: 'special', dueDate: '',
-    targetGrades: [], targetCourses: [], description: '', attachmentUrl: '', attachedFiles: []
+    targetGrades: [], targetCourses: [], description: '', attachmentLinks: [], attachedFiles: []
   });
   
   const [isEditingTask, setIsEditingTask] = useState(false);
@@ -417,7 +416,7 @@ export default function ChikyukanTaskSystem() {
   const openTaskModal = () => {
     setIsEditingTask(false);
     setEditingTaskId(null);
-    setTaskForm({ title: '', type: 'special', dueDate: '', targetGrades: [], targetCourses: [], description: '', attachmentUrl: '', attachedFiles: [] });
+    setTaskForm({ title: '', type: 'special', dueDate: '', targetGrades: [], targetCourses: [], description: '', attachmentLinks: [], attachedFiles: [] });
     setIsTaskModalOpen(true);
   };
 
@@ -427,7 +426,8 @@ export default function ChikyukanTaskSystem() {
     setTaskForm({
       title: task.title, type: task.type, dueDate: task.dueDate || '',
       targetGrades: task.targetGrades || [], targetCourses: task.targetCourses || [],
-      description: task.description || '', attachmentUrl: task.attachmentUrl || '', 
+      description: task.description || '', 
+      attachmentLinks: task.attachmentLinks || (task.attachmentUrl ? [{ name: '手順書・マニュアル', url: task.attachmentUrl }] : []), 
       attachedFiles: task.attachedFiles || (task.attachedFile ? [task.attachedFile] : [])
     });
     setSelectedTask(null);
@@ -443,7 +443,7 @@ export default function ChikyukanTaskSystem() {
       targetGrades: taskToCopy.targetGrades || [],
       targetCourses: taskToCopy.targetCourses || [],
       description: taskToCopy.description || '',
-      attachmentUrl: taskToCopy.attachmentUrl || '',
+      attachmentLinks: taskToCopy.attachmentLinks || (taskToCopy.attachmentUrl ? [{ name: '手順書・マニュアル', url: taskToCopy.attachmentUrl }] : []),
       attachedFiles: taskToCopy.attachedFiles || (taskToCopy.attachedFile ? [taskToCopy.attachedFile] : [])
     });
     setSelectedTask(null);
@@ -454,11 +454,15 @@ export default function ChikyukanTaskSystem() {
   const handleCreateTask = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    
+    // 空のリンクを取り除く
+    const filteredLinks = (taskForm.attachmentLinks || []).filter(link => link.url.trim() !== '');
+
     try {
       if (isEditingTask && editingTaskId) {
         const updates = {
           title: taskForm.title, dueDate: taskForm.dueDate, targetGrades: taskForm.targetGrades, targetCourses: taskForm.targetCourses,
-          description: taskForm.description, attachmentUrl: taskForm.attachmentUrl, attachedFiles: taskForm.attachedFiles || []
+          description: taskForm.description, attachmentLinks: filteredLinks, attachedFiles: taskForm.attachedFiles || []
         };
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTaskId), updates);
         showToast('特別タスクを更新しました');
@@ -467,7 +471,7 @@ export default function ChikyukanTaskSystem() {
         const newTask = {
           title: taskForm.title, type: 'special', author: currentUser.name, createdAt: serverTimestamp(),
           dueDate: taskForm.dueDate, targetGrades: taskForm.targetGrades, targetCourses: taskForm.targetCourses,
-          description: taskForm.description, attachmentUrl: taskForm.attachmentUrl, attachedFiles: taskForm.attachedFiles || [],
+          description: taskForm.description, attachmentLinks: filteredLinks, attachedFiles: taskForm.attachedFiles || [],
           status: 'todo', order: maxOrder + 1, assignee: null, reportMemo: '', comments: [], archived: false,
           inventoryDetails: null, reportFiles: []
         };
@@ -484,7 +488,7 @@ export default function ChikyukanTaskSystem() {
     setRoutineForm({
       action: isEmployee ? 'request' : 'done', description: '', reportMemo: '', actualAssignee: '',
       inventoryDetails: { a3: '', a4: '', b4: '', b5: '' },
-      attachedFiles: [], reportFiles: []
+      attachmentLinks: [], attachedFiles: [], reportFiles: []
     });
   };
 
@@ -500,13 +504,18 @@ export default function ChikyukanTaskSystem() {
     setIsSubmitting(true);
     try {
       const assigneeName = isDone ? (!isEmployee ? routineForm.actualAssignee.trim() : currentUser.name) : null;
+      
       // 指示ファイルは個別の添付を優先し、なければマスタのものを使用する
       const finalAttachedFiles = routineForm.attachedFiles?.length > 0 ? routineForm.attachedFiles : (selectedNewRoutine.attachedFiles || []);
+      
+      // リンクも同様に処理
+      const filteredRoutineLinks = (routineForm.attachmentLinks || []).filter(link => link.url.trim() !== '');
+      const finalAttachmentLinks = filteredRoutineLinks.length > 0 ? filteredRoutineLinks : (selectedNewRoutine.manualUrl ? [{ name: 'マニュアル', url: selectedNewRoutine.manualUrl }] : []);
       
       const newTask = {
         title: selectedNewRoutine.name, type: 'routine', routineId: selectedNewRoutine.id, formType: selectedNewRoutine.formType,
         author: currentUser.name, createdAt: serverTimestamp(), targetDate: routineDate,
-        description: routineForm.description, attachmentUrl: selectedNewRoutine.manualUrl || '',
+        description: routineForm.description, attachmentLinks: finalAttachmentLinks,
         attachedFiles: finalAttachedFiles,
         status: isDone ? 'done' : 'todo', order: 0, assignee: assigneeName,
         reportMemo: isDone ? routineForm.reportMemo : '', 
@@ -1198,7 +1207,7 @@ export default function ChikyukanTaskSystem() {
             <form onSubmit={handleCreateRoutineTask} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
               <div className="bg-slate-100 rounded-lg p-3 text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> 対象日: {formatDateWithDay(routineDate)}</div>
 
-              {/* マニュアル・手順書エリア（追加部分） */}
+              {/* マニュアル・手順書エリア */}
               {(selectedNewRoutine.manualUrl || (selectedNewRoutine.attachedFiles && selectedNewRoutine.attachedFiles.length > 0)) && (
                 <div className="space-y-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100 mb-4">
                   <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> マニュアル・手順書</h4>
@@ -1229,11 +1238,54 @@ export default function ChikyukanTaskSystem() {
               )}
 
               {routineForm.action === 'request' ? (
-                <div className="space-y-4 animate-in fade-in">
+                <div className="space-y-6 animate-in fade-in">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">本日の指示・連絡メモ（任意）</label>
                     <textarea rows="4" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-200 outline-none bg-slate-50 focus:bg-white" value={routineForm.description} onChange={e => setRoutineForm({...routineForm, description: e.target.value})} placeholder="具体的な手順や注意書きがあれば記入してください" />
                   </div>
+                  
+                  <div className="border-t border-slate-100 pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-bold text-slate-700">追加の手順書リンク（複数可・任意）</label>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={copyDriveUrl} className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors flex items-center gap-1">
+                          <Copy className="w-3 h-3"/> URLをコピー
+                        </button>
+                        <a href="https://drive.google.com/drive/folders/1wKyynLD_2w9q1GsIWS3YArm6U4n6EERP?usp=drive_link" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded">
+                          <Folder className="w-3 h-3"/> ドライブを開く
+                        </a>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {routineForm.attachmentLinks?.map((link, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-slate-50 p-2 rounded-xl border border-slate-200">
+                          <div className="flex-[1] w-full">
+                            <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={link.name} onChange={e => {
+                              const newLinks = [...routineForm.attachmentLinks];
+                              newLinks[idx].name = e.target.value;
+                              setRoutineForm({...routineForm, attachmentLinks: newLinks});
+                            }} placeholder="表示名 (例: 座席表)" />
+                          </div>
+                          <div className="flex-[2] w-full">
+                            <input type="url" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={link.url} onChange={e => {
+                              const newLinks = [...routineForm.attachmentLinks];
+                              newLinks[idx].url = e.target.value;
+                              setRoutineForm({...routineForm, attachmentLinks: newLinks});
+                            }} placeholder="https://" />
+                          </div>
+                          <button type="button" onClick={() => {
+                            setRoutineForm({...routineForm, attachmentLinks: routineForm.attachmentLinks.filter((_, i) => i !== idx)});
+                          }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 shrink-0 self-end sm:self-auto">
+                            <X className="w-5 h-5"/>
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => setRoutineForm(prev => ({ ...prev, attachmentLinks: [...(prev.attachmentLinks || []), { name: '', url: '' }] }))} className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1 mt-2">
+                        <Plus className="w-4 h-4"/> リンクを追加
+                      </button>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">指示の添付ファイル（複数可・任意）</label>
                     <div className="relative border-2 border-dashed border-slate-300 rounded-xl px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 text-sm text-slate-600 h-[46px] cursor-pointer">
@@ -1324,42 +1376,69 @@ export default function ChikyukanTaskSystem() {
                 <div><label className="block text-sm font-bold text-slate-700 mb-2">対象学年（任意）</label><div className="h-32 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-1">{settings.grades.map(g => (<label key={g} className="flex items-center gap-2 text-sm cursor-pointer p-1 hover:bg-slate-100 rounded"><input type="checkbox" className="accent-amber-600 rounded" checked={taskForm.targetGrades.includes(g)} onChange={() => setTaskForm(prev => ({...prev, targetGrades: prev.targetGrades.includes(g) ? prev.targetGrades.filter(x => x !== g) : [...prev.targetGrades, g] }))} /> {g}</label>))}</div></div>
                 <div><label className="block text-sm font-bold text-slate-700 mb-2">対象コース（任意）</label><div className="h-32 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-1">{settings.courses.map(c => (<label key={c} className="flex items-center gap-2 text-sm cursor-pointer p-1 hover:bg-slate-100 rounded"><input type="checkbox" className="accent-amber-600 rounded" checked={taskForm.targetCourses.includes(c)} onChange={() => setTaskForm(prev => ({...prev, targetCourses: prev.targetCourses.includes(c) ? prev.targetCourses.filter(x => x !== c) : [...prev.targetCourses, c] }))} /> {c}</label>))}</div></div>
               </div>
-              <div className="space-y-4 border-t border-slate-100 pt-6">
+              <div className="space-y-6 border-t border-slate-100 pt-6">
                 <div><label className="block text-sm font-bold text-slate-700 mb-2">詳細な手順・説明（任意）</label><textarea rows="4" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-200 outline-none bg-slate-50 focus:bg-white transition-colors" value={taskForm.description} onChange={e => setTaskForm({...taskForm, description: e.target.value})} placeholder="具体的な手順や注意書きがあれば記入してください" /></div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-bold text-slate-700 mb-2 flex items-center justify-between">
-                      <span>手順書リンクURL（任意）</span>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={copyDriveUrl} className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors flex items-center gap-1">
-                          <Copy className="w-3 h-3"/> URLをコピー
-                        </button>
-                        <a href="https://drive.google.com/drive/folders/1wKyynLD_2w9q1GsIWS3YArm6U4n6EERP?usp=drive_link" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded">
-                          <Folder className="w-3 h-3"/> ドライブを開く
-                        </a>
-                      </div>
-                    </label>
-                    <input type="url" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-200 outline-none" value={taskForm.attachmentUrl} onChange={e => setTaskForm({...taskForm, attachmentUrl: e.target.value})} placeholder="https://" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">ファイルの直接添付（複数可・任意）</label>
-                    <div className="relative border-2 border-dashed border-slate-300 rounded-xl px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 text-sm text-slate-600 h-[46px] cursor-pointer">
-                      <UploadCloud className="w-4 h-4"/>
-                      <span>ファイルを選択 (1ファイル750KB以下)</span>
-                      <input type="file" multiple onChange={e => handleMultipleFilesUpload(e, setTaskForm, 'attachedFiles')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-bold text-slate-700">手順書・関連リンク（複数可・任意）</label>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={copyDriveUrl} className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors flex items-center gap-1">
+                        <Copy className="w-3 h-3"/> ドライブURLをコピー
+                      </button>
+                      <a href="https://drive.google.com/drive/folders/1wKyynLD_2w9q1GsIWS3YArm6U4n6EERP?usp=drive_link" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded">
+                        <Folder className="w-3 h-3"/> ドライブを開く
+                      </a>
                     </div>
-                    {taskForm.attachedFiles?.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {taskForm.attachedFiles.map((file, idx) => (
-                          <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border border-slate-200 text-xs">
-                            <span className="truncate flex-1">{file.name}</span>
-                            <button type="button" onClick={() => setTaskForm(prev => ({...prev, attachedFiles: prev.attachedFiles.filter((_, i) => i !== idx)}))} className="text-red-500 hover:underline ml-2">削除</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
+                  
+                  <div className="space-y-2">
+                    {taskForm.attachmentLinks?.map((link, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start sm:items-center bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <div className="flex-[1] w-full">
+                          <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-200 outline-none" value={link.name} onChange={e => {
+                            const newLinks = [...taskForm.attachmentLinks];
+                            newLinks[idx].name = e.target.value;
+                            setTaskForm({...taskForm, attachmentLinks: newLinks});
+                          }} placeholder="表示名 (例: マニュアル)" />
+                        </div>
+                        <div className="flex-[2] w-full">
+                          <input type="url" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-200 outline-none" value={link.url} onChange={e => {
+                            const newLinks = [...taskForm.attachmentLinks];
+                            newLinks[idx].url = e.target.value;
+                            setTaskForm({...taskForm, attachmentLinks: newLinks});
+                          }} placeholder="https://" />
+                        </div>
+                        <button type="button" onClick={() => {
+                          setTaskForm({...taskForm, attachmentLinks: taskForm.attachmentLinks.filter((_, i) => i !== idx)});
+                        }} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 shrink-0 self-end sm:self-auto">
+                          <X className="w-5 h-5"/>
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setTaskForm(prev => ({ ...prev, attachmentLinks: [...(prev.attachmentLinks || []), { name: '', url: '' }] }))} className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1 mt-2">
+                      <Plus className="w-4 h-4"/> リンクを追加
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">ファイルの直接添付（複数可・任意）</label>
+                  <div className="relative border-2 border-dashed border-slate-300 rounded-xl px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 text-sm text-slate-600 h-[46px] cursor-pointer">
+                    <UploadCloud className="w-4 h-4"/>
+                    <span>ファイルを選択 (1ファイル750KB以下)</span>
+                    <input type="file" multiple onChange={e => handleMultipleFilesUpload(e, setTaskForm, 'attachedFiles')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+                  </div>
+                  {taskForm.attachedFiles?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {taskForm.attachedFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border border-slate-200 text-xs">
+                          <span className="truncate flex-1">{file.name}</span>
+                          <button type="button" onClick={() => setTaskForm(prev => ({...prev, attachedFiles: prev.attachedFiles.filter((_, i) => i !== idx)}))} className="text-red-500 hover:underline ml-2">削除</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </form>
@@ -1412,16 +1491,24 @@ export default function ChikyukanTaskSystem() {
               )}
 
               {/* マニュアル・添付ファイル リンク */}
-              {(selectedTask.attachmentUrl || (selectedTask.attachedFiles && selectedTask.attachedFiles.length > 0)) && (
-                <div className="space-y-2">
+              {(selectedTask.attachmentUrl || (selectedTask.attachmentLinks && selectedTask.attachmentLinks.length > 0) || (selectedTask.attachedFiles && selectedTask.attachedFiles.length > 0)) && (
+                <div className="space-y-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                  <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> 関連リンク・資料</h4>
                   {selectedTask.attachmentUrl && (
-                    <a href={selectedTask.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-4 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold transition-colors border border-blue-200 shadow-sm text-sm">
-                      <BookOpen className="w-5 h-5" /> 手順書・マニュアルを開く
+                    <a href={selectedTask.attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                      <ExternalLink className="w-4 h-4" /> リンクを開く
                     </a>
                   )}
+                  {selectedTask.attachmentLinks?.map((link, idx) => (
+                    link.url && (
+                      <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                        <ExternalLink className="w-4 h-4" /> {link.name || 'リンクを開く'}
+                      </a>
+                    )
+                  ))}
                   {selectedTask.attachedFiles?.map((file, idx) => (
-                    <a key={idx} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-4 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm text-sm">
-                      <File className="w-5 h-5 text-slate-400" /> 指示の添付ファイル ({file.name})
+                    <a key={idx} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                      <File className="w-4 h-4 text-blue-400" /> 指示ファイル ({file.name})
                     </a>
                   ))}
                 </div>
@@ -1580,4 +1667,3 @@ export default function ChikyukanTaskSystem() {
     </div>
   );
 }
-
