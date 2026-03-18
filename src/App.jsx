@@ -40,7 +40,8 @@ const INITIAL_MEMBERS = [
   { name: '合路郁子', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
   { name: '亀井淳史', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
   { name: '杉村茉衣', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
-  { name: '森岡優希', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
+  { name: '森岡優希', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' }, 
+ { name: '小髙みずき', branch: '知求館（北大路）', role: 'スタッフ', password: 'seiki' },
   { name: 'アルバイト（共通）', branch: '知求館（北大路）', role: 'アルバイト', password: 'seiki' }
 ];
 
