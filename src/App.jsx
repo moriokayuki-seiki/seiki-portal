@@ -4,7 +4,7 @@ import {
   Settings, LogOut, Plus, ChevronLeft, ChevronRight, X, Search, 
   FileText, ArrowUp, ArrowDown, Bell, BookOpen, Package, 
   Calendar as CalendarIcon, Save, Edit3, Trash2, ShieldCheck, Info,
-  Copy, UploadCloud, File, Folder, ExternalLink
+  Copy, UploadCloud, File, Folder, ExternalLink, MailWarning
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
@@ -17,7 +17,7 @@ const getFirebaseConfig = () => {
   if (typeof __firebase_config !== 'undefined') {
     return JSON.parse(__firebase_config);
   }
-  return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
+   return { apiKey: "AIzaSyAMxTDK4w4Ys9Dji-mxkl9Wi9tpjKPm6ho", authDomain: "seiki-portal.firebaseapp.com", projectId: "seiki-portal", storageBucket: "seiki-portal.firebasestorage.app", messagingSenderId: "806874141485", appId: "1:806874141485:web:76f51d0dd67664542079a4" };
 };
 
 
@@ -46,13 +46,13 @@ const INITIAL_MEMBERS = [
 ];
 
 const INITIAL_ROUTINES = [
-  { id: 'r1', name: '授業で使用する印刷物の印刷', formType: 'none', attachmentLinks: [] },
-  { id: 'r2', name: '古紙の回収', formType: 'none', attachmentLinks: [] },
-  { id: 'r3', name: '季節の掲示物の作成・掲示', formType: 'none', attachmentLinks: [] },
-  { id: 'r4', name: 'ごみの回収', formType: 'none', attachmentLinks: [] },
-  { id: 'r5', name: 'マーカーのインクの補充', formType: 'none', attachmentLinks: [] },
-  { id: 'r6', name: '紙の在庫確認', formType: 'inventory', attachmentLinks: [] },
-  { id: 'r7', name: 'パンフレット類の補充', formType: 'none', attachmentLinks: [] }
+  { id: 'r1', name: '授業で使用する印刷物の印刷', formType: 'none', description: '', attachmentLinks: [] },
+  { id: 'r2', name: '古紙の回収', formType: 'none', description: '', attachmentLinks: [] },
+  { id: 'r3', name: '季節の掲示物の作成・掲示', formType: 'none', description: '', attachmentLinks: [] },
+  { id: 'r4', name: 'ごみの回収', formType: 'none', description: '', attachmentLinks: [] },
+  { id: 'r5', name: 'マーカーのインクの補充', formType: 'none', description: '', attachmentLinks: [] },
+  { id: 'r6', name: '紙の在庫確認', formType: 'inventory', description: '', attachmentLinks: [] },
+  { id: 'r7', name: 'パンフレット類の補充', formType: 'none', description: '', attachmentLinks: [] }
 ];
 
 const RULES_TEXT = [
@@ -172,7 +172,12 @@ export default function ChikyukanTaskSystem() {
   const [members, setMembers] = useState([]);      
   const [currentUser, setCurrentUser] = useState(null); 
   const [tasks, setTasks] = useState([]);         
-  const [settings, setSettings] = useState({ grades: DEFAULT_GRADES, courses: DEFAULT_COURSES, routines: INITIAL_ROUTINES });
+  const [settings, setSettings] = useState({ 
+    grades: DEFAULT_GRADES, 
+    courses: DEFAULT_COURSES, 
+    routines: INITIAL_ROUTINES,
+    alertSettings: { email: '', inventoryThreshold: 10 }
+  });
 
   const [viewMode, setViewMode] = useState('dashboard'); // dashboard, routine, special, history, settings
   const [toasts, setToasts] = useState([]);
@@ -222,9 +227,12 @@ export default function ChikyukanTaskSystem() {
   const [newCourse, setNewCourse] = useState('');
   
   // ルーティン設定用
-  const [newRoutine, setNewRoutine] = useState({ name: '', formType: 'none', attachmentLinks: [], attachedFiles: [] });
+  const [newRoutine, setNewRoutine] = useState({ name: '', formType: 'none', description: '', attachmentLinks: [], attachedFiles: [] });
   const [editingRoutineId, setEditingRoutineId] = useState(null);
-  const [editRoutineForm, setEditRoutineForm] = useState({ name: '', formType: 'none', attachmentLinks: [], attachedFiles: [] });
+  const [editRoutineForm, setEditRoutineForm] = useState({ name: '', formType: 'none', description: '', attachmentLinks: [], attachedFiles: [] });
+  
+  // アラート設定用
+  const [alertSettingsForm, setAlertSettingsForm] = useState({ email: '', inventoryThreshold: 10 });
 
   const showToast = (message, type = 'success') => {
     const id = Date.now();
@@ -272,10 +280,17 @@ export default function ChikyukanTaskSystem() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setSettings({
-          grades: data.grades || DEFAULT_GRADES, courses: data.courses || DEFAULT_COURSES, routines: data.routines || INITIAL_ROUTINES
+          grades: data.grades || DEFAULT_GRADES, 
+          courses: data.courses || DEFAULT_COURSES, 
+          routines: data.routines || INITIAL_ROUTINES,
+          alertSettings: data.alertSettings || { email: '', inventoryThreshold: 10 }
         });
+        setAlertSettingsForm(data.alertSettings || { email: '', inventoryThreshold: 10 });
       } else {
-        setDoc(settingsRef, { grades: DEFAULT_GRADES, courses: DEFAULT_COURSES, routines: INITIAL_ROUTINES });
+        const initialData = { grades: DEFAULT_GRADES, courses: DEFAULT_COURSES, routines: INITIAL_ROUTINES, alertSettings: { email: '', inventoryThreshold: 10 } };
+        setDoc(settingsRef, initialData);
+        setSettings(initialData);
+        setAlertSettingsForm(initialData.alertSettings);
       }
     });
 
@@ -328,7 +343,8 @@ export default function ChikyukanTaskSystem() {
     }).sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
   }, [sortedTasks, searchQuery, statusFilter]);
 
-  const pendingConfirmationTasks = useMemo(() => tasks.filter(t => t.status === 'done' && !t.archived), [tasks]);
+  const pendingConfirmationTasks = useMemo(() => tasks.filter(t => t.status === 'done' && !t.archived && !t.lowInventoryAlert), [tasks]);
+  const alertTasks = useMemo(() => tasks.filter(t => t.lowInventoryAlert && !t.archived), [tasks]);
 
   const executeConfirm = async () => {
     if (confirmDialog.onConfirm) {
@@ -480,7 +496,7 @@ export default function ChikyukanTaskSystem() {
           dueDate: taskForm.dueDate, targetGrades: taskForm.targetGrades, targetCourses: taskForm.targetCourses,
           description: taskForm.description, attachmentLinks: filteredLinks, attachedFiles: taskForm.attachedFiles || [],
           status: 'todo', order: maxOrder + 1, assignee: null, reportMemo: '', comments: [], archived: false,
-          inventoryDetails: null, reportFiles: []
+          inventoryDetails: null, reportFiles: [], lowInventoryAlert: false
         };
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), newTask);
         showToast('特別タスクを発行しました');
@@ -488,6 +504,22 @@ export default function ChikyukanTaskSystem() {
       }
       setIsTaskModalOpen(false);
     } catch (e) { showToast('タスクの保存に失敗しました', 'error'); } finally { setIsSubmitting(false); }
+  };
+
+  const checkLowInventory = (inventoryData) => {
+    if (!inventoryData) return { isLow: false, message: '' };
+    const threshold = Number(settings.alertSettings?.inventoryThreshold) || 10;
+    const lowItems = [];
+    ['a3', 'a4', 'b4', 'b5'].forEach(size => {
+      const val = parseInt(inventoryData[size], 10);
+      if (!isNaN(val) && val <= threshold) {
+        lowItems.push(size.toUpperCase());
+      }
+    });
+    if (lowItems.length > 0) {
+      return { isLow: true, message: `【在庫不足】${lowItems.join(', ')} が ${threshold}部 以下です。至急補充・発注が必要です。` };
+    }
+    return { isLow: false, message: '' };
   };
 
   const openNewRoutineModal = (routine) => {
@@ -523,20 +555,34 @@ export default function ChikyukanTaskSystem() {
       const masterLinks = selectedNewRoutine.attachmentLinks?.length > 0 ? selectedNewRoutine.attachmentLinks : (selectedNewRoutine.manualUrl ? [{ name: 'マニュアル', url: selectedNewRoutine.manualUrl }] : []);
       const finalAttachmentLinks = filteredRoutineLinks.length > 0 ? filteredRoutineLinks : masterLinks;
       
+      let lowInventoryAlert = false;
+      let alertMessage = '';
+      if (isDone && selectedNewRoutine.formType === 'inventory') {
+        const check = checkLowInventory(routineForm.inventoryDetails);
+        lowInventoryAlert = check.isLow;
+        alertMessage = check.message;
+      }
+
       const newTask = {
         title: selectedNewRoutine.name, type: 'routine', routineId: selectedNewRoutine.id, formType: selectedNewRoutine.formType,
         author: currentUser.name, createdAt: serverTimestamp(), targetDate: routineDate,
         description: routineForm.description, attachmentLinks: finalAttachmentLinks,
-        attachedFiles: finalAttachedFiles,
+        attachedFiles: finalAttachedFiles, masterDescription: selectedNewRoutine.description || '', // マスターの説明文を保持
         status: isDone ? 'done' : 'todo', order: 0, assignee: assigneeName,
         reportMemo: isDone ? routineForm.reportMemo : '', 
         reportFiles: isDone ? routineForm.reportFiles : [],
         comments: [], archived: false,
-        inventoryDetails: isDone && selectedNewRoutine.formType === 'inventory' ? routineForm.inventoryDetails : null
+        inventoryDetails: isDone && selectedNewRoutine.formType === 'inventory' ? routineForm.inventoryDetails : null,
+        lowInventoryAlert, alertMessage
       };
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), newTask);
       setSelectedNewRoutine(null);
-      showToast(isDone ? 'ルーティンの完了報告をしました' : 'ルーティン作業を依頼しました');
+      
+      if (lowInventoryAlert && settings.alertSettings?.email) {
+        showToast(`${settings.alertSettings.email} 宛に在庫アラートを送信しました`, 'error');
+      } else {
+        showToast(isDone ? 'ルーティンの完了報告をしました' : 'ルーティン作業を依頼しました');
+      }
     } catch(err) { showToast('処理に失敗しました', 'error'); } finally { setIsSubmitting(false); }
   };
 
@@ -546,12 +592,27 @@ export default function ChikyukanTaskSystem() {
       return;
     }
     const assigneeName = !isEmployee ? actualAssignee.trim() : currentUser.name;
+    
+    let lowInventoryAlert = false;
+    let alertMessage = '';
+    if (selectedTask.formType === 'inventory') {
+      const check = checkLowInventory(inventoryDetails);
+      lowInventoryAlert = check.isLow;
+      alertMessage = check.message;
+    }
+
     handleUpdateTaskStatus(selectedTask.id, 'done', { 
       reportMemo, 
       inventoryDetails: selectedTask.formType === 'inventory' ? inventoryDetails : null,
       assignee: assigneeName,
-      reportFiles: reportFiles
+      reportFiles: reportFiles,
+      lowInventoryAlert,
+      alertMessage
     });
+    
+    if (lowInventoryAlert && settings.alertSettings?.email) {
+      setTimeout(() => showToast(`${settings.alertSettings.email} 宛に在庫不足アラートを送信しました`, 'error'), 500);
+    }
   };
 
   const handleUpdateTaskStatus = async (taskId, newStatus, additionalData = {}) => {
@@ -559,6 +620,11 @@ export default function ChikyukanTaskSystem() {
     try {
       const updates = { status: newStatus, ...additionalData };
       if (newStatus === 'in-progress' && !additionalData.assignee) updates.assignee = currentUser.name;
+      // 進行中や未着手に戻る場合はアラートフラグを消す
+      if (newStatus !== 'done') {
+        updates.lowInventoryAlert = false;
+        updates.alertMessage = '';
+      }
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId), updates);
       setSelectedTask(null);
       showToast('ステータスを更新しました');
@@ -620,14 +686,23 @@ export default function ChikyukanTaskSystem() {
     try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master'), { [field]: value }); showToast('設定を更新しました'); } catch(e) { showToast('更新に失敗しました', 'error'); }
   };
 
+  const handleUpdateAlertSettings = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master'), { alertSettings: alertSettingsForm });
+      showToast('アラート設定を更新しました');
+    } catch(e) { showToast('更新に失敗しました', 'error'); } finally { setIsSubmitting(false); }
+  };
+
   const handleAddRoutine = async () => {
     if (!newRoutine.name.trim()) return;
     setIsSubmitting(true);
     try {
       const filteredLinks = (newRoutine.attachmentLinks || []).filter(link => link.url.trim() !== '');
-      const newRoutines = [...settings.routines, { id: 'r' + Date.now(), name: newRoutine.name.trim(), formType: newRoutine.formType, attachmentLinks: filteredLinks, attachedFiles: newRoutine.attachedFiles || [] }];
+      const newRoutines = [...settings.routines, { id: 'r' + Date.now(), name: newRoutine.name.trim(), formType: newRoutine.formType, description: newRoutine.description.trim(), attachmentLinks: filteredLinks, attachedFiles: newRoutine.attachedFiles || [] }];
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master'), { routines: newRoutines });
-      setNewRoutine({ name: '', formType: 'none', attachmentLinks: [], attachedFiles: [] });
+      setNewRoutine({ name: '', formType: 'none', description: '', attachmentLinks: [], attachedFiles: [] });
       showToast('ルーティンを追加しました');
     } catch(e) { showToast('追加に失敗しました', 'error'); } finally { setIsSubmitting(false); }
   };
@@ -638,7 +713,7 @@ export default function ChikyukanTaskSystem() {
     try {
       const filteredLinks = (editRoutineForm.attachmentLinks || []).filter(link => link.url.trim() !== '');
       const updatedRoutines = settings.routines.map(r => 
-        r.id === id ? { ...r, name: editRoutineForm.name.trim(), formType: editRoutineForm.formType, attachmentLinks: filteredLinks, attachedFiles: editRoutineForm.attachedFiles || [] } : r
+        r.id === id ? { ...r, name: editRoutineForm.name.trim(), formType: editRoutineForm.formType, description: editRoutineForm.description.trim(), attachmentLinks: filteredLinks, attachedFiles: editRoutineForm.attachedFiles || [] } : r
       );
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master'), { routines: updatedRoutines });
       setEditingRoutineId(null);
@@ -648,6 +723,21 @@ export default function ChikyukanTaskSystem() {
 
   const handleDeleteRoutine = (id) => {
     setConfirmDialog({ isOpen: true, message: 'このルーティンを削除しますか？', onConfirm: async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master'), { routines: settings.routines.filter(r => r.id !== id) }); showToast('ルーティンを削除しました'); } });
+  };
+  
+  const handleMoveRoutineOrder = async (index, direction) => {
+    const newRoutines = [...settings.routines];
+    if (direction === 'up' && index > 0) {
+      [newRoutines[index - 1], newRoutines[index]] = [newRoutines[index], newRoutines[index - 1]];
+    } else if (direction === 'down' && index < newRoutines.length - 1) {
+      [newRoutines[index + 1], newRoutines[index]] = [newRoutines[index], newRoutines[index + 1]];
+    } else {
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'master'), { routines: newRoutines });
+    } catch(e) { showToast('順序の変更に失敗しました', 'error'); } finally { setIsSubmitting(false); }
   };
 
   const changeDate = (days) => {
@@ -816,6 +906,38 @@ export default function ChikyukanTaskSystem() {
                   {formatDateWithDay(formatYMD(new Date()))}
                 </h2>
               </div>
+
+              {/* 🚨 在庫不足アラート（社員・管理者向け） */}
+              {isEmployee && alertTasks.length > 0 && (
+                <div className="bg-red-50 rounded-2xl shadow-sm border-2 border-red-400 overflow-hidden animate-in slide-in-from-top-4">
+                  <div className="bg-red-500 px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3 text-white">
+                      <MailWarning className="w-6 h-6 animate-pulse" />
+                      <h3 className="font-black text-lg">🚨 緊急アラート：在庫不足</h3>
+                    </div>
+                    <span className="bg-white text-red-600 text-xs font-bold px-3 py-1 rounded-full shadow-sm">{alertTasks.length} 件</span>
+                  </div>
+                  <div className="p-2">
+                    <div className="divide-y divide-red-100">
+                      {alertTasks.map(task => (
+                        <div key={task.id} className="p-4 hover:bg-red-100 transition-colors flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openTaskDetail(task)}>
+                            <h4 className="font-bold text-red-900 truncate mb-1">{task.alertMessage}</h4>
+                            <div className="flex gap-3 text-xs text-red-700/70">
+                              <span>報告: <strong className="text-red-800">{task.assignee}</strong></span>
+                              <span>日時: {formatDateTimeWithDay(new Date(task.createdAt?.toMillis?.() || Date.now()))}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => handleArchiveTask(task.id)} className="bg-white hover:bg-slate-100 text-red-600 border border-red-200 text-xs font-bold px-4 py-2 rounded-lg transition-colors whitespace-nowrap shadow-sm">
+                            確認・対応済みにする
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex items-center gap-3"><User className="w-6 h-6 text-amber-600" /><h3 className="text-amber-800 font-black text-lg">アルバイトとしての心得</h3></div>
                 <div className="p-6">
@@ -917,7 +1039,7 @@ export default function ChikyukanTaskSystem() {
                             <h3 className={`font-bold text-base mb-1 transition-colors ${isCompleted ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{r.name}</h3>
                             <div className="flex flex-wrap gap-2">
                               {r.formType === 'inventory' && <span className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded border border-orange-100 font-bold">在庫入力</span>}
-                              {(hasLinks || r.attachedFiles?.length > 0) && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200 font-bold flex items-center gap-1"><BookOpen className="w-3 h-3"/> マニュアル有</span>}
+                              {(hasLinks || r.attachedFiles?.length > 0 || r.description) && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200 font-bold flex items-center gap-1"><BookOpen className="w-3 h-3"/> 手順・説明あり</span>}
                             </div>
                           </div>
                         </div>
@@ -1025,11 +1147,14 @@ export default function ChikyukanTaskSystem() {
 
           {/* --- 管理者設定 --- */}
           {viewMode === 'settings' && isAdmin && (
-            <div className="max-w-4xl mx-auto flex gap-6 h-full animate-in fade-in">
-              <div className="w-64 flex flex-col gap-2">
+            <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-6 h-full animate-in fade-in">
+              <div className="w-full md:w-64 flex flex-col gap-2 shrink-0">
                 <button onClick={() => setSettingsTab('members')} className={`p-3 rounded-xl text-sm font-bold text-left transition-colors ${settingsTab === 'members' ? 'bg-white shadow-sm border border-slate-200 text-blue-700' : 'text-slate-600 hover:bg-slate-200'}`}>アカウント管理</button>
                 <button onClick={() => setSettingsTab('options')} className={`p-3 rounded-xl text-sm font-bold text-left transition-colors ${settingsTab === 'options' ? 'bg-white shadow-sm border border-slate-200 text-blue-700' : 'text-slate-600 hover:bg-slate-200'}`}>学年・コース設定</button>
                 <button onClick={() => setSettingsTab('routines')} className={`p-3 rounded-xl text-sm font-bold text-left transition-colors ${settingsTab === 'routines' ? 'bg-white shadow-sm border border-slate-200 text-blue-700' : 'text-slate-600 hover:bg-slate-200'}`}>ルーティン設定</button>
+                <button onClick={() => setSettingsTab('alerts')} className={`p-3 rounded-xl text-sm font-bold text-left transition-colors flex justify-between items-center ${settingsTab === 'alerts' ? 'bg-white shadow-sm border border-slate-200 text-blue-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                  アラート・通知設定 {settings.alertSettings?.email && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                </button>
               </div>
               <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 overflow-y-auto">
                 {settingsTab === 'members' && (
@@ -1078,33 +1203,87 @@ export default function ChikyukanTaskSystem() {
                     </div>
                   </div>
                 )}
+                {settingsTab === 'alerts' && (
+                  <div className="space-y-8 animate-in fade-in">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 mb-4 border-b pb-2 flex items-center gap-2">
+                        <MailWarning className="w-5 h-5 text-red-500"/> 在庫アラート・通知設定
+                      </h3>
+                      <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                        アルバイトが入力した紙の在庫数が「通知する閾値（部数）」以下になった場合、指定したメールアドレスへ通知し、ダッシュボードに警告を表示します。
+                      </p>
+                      
+                      <form onSubmit={handleUpdateAlertSettings} className="space-y-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">通知先メールアドレス（任意）</label>
+                          <input 
+                            type="email" 
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-200 outline-none bg-white" 
+                            value={alertSettingsForm.email} 
+                            onChange={e => setAlertSettingsForm({...alertSettingsForm, email: e.target.value})} 
+                            placeholder="admin@example.com" 
+                          />
+                          <p className="text-[10px] text-slate-500 mt-2">※ダミー動作：現在、実際のメールは送信されませんがシステム内で警告が表示されます。</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">通知する閾値（何部以下になったら警告するか）</label>
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="number" min="0" required
+                              className="w-32 px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-200 outline-none bg-white text-right" 
+                              value={alertSettingsForm.inventoryThreshold} 
+                              onChange={e => setAlertSettingsForm({...alertSettingsForm, inventoryThreshold: e.target.value})} 
+                            />
+                            <span className="text-sm font-bold text-slate-600">部 以下</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-200 flex justify-end">
+                          <button type="submit" disabled={isSubmitting} className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95">
+                            設定を保存する
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
                 {settingsTab === 'routines' && (
                   <div className="space-y-8 animate-in fade-in">
                     <div>
                       <h3 className="text-lg font-black text-slate-800 mb-4 border-b pb-2">ルーティンの追加</h3>
-                      <div className="flex gap-3 items-start">
-                        <div className="flex-1 space-y-3">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">ルーティン名 <span className="text-red-500">*</span></label>
-                            <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={newRoutine.name} onChange={e => setNewRoutine({...newRoutine, name: e.target.value})} placeholder="例：黒板消しクリーナー清掃" />
+                      <div className="flex flex-col gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <div className="flex gap-4">
+                          <div className="flex-[2] space-y-3">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-1">ルーティン名 <span className="text-red-500">*</span></label>
+                              <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={newRoutine.name} onChange={e => setNewRoutine({...newRoutine, name: e.target.value})} placeholder="例：黒板消しクリーナー清掃" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-1">特殊フォームの表示</label>
+                              <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={newRoutine.formType} onChange={e => setNewRoutine({...newRoutine, formType: e.target.value})}>
+                                <option value="none">なし（通常）</option>
+                                <option value="inventory">在庫報告フォーム</option>
+                              </select>
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">特殊フォームの表示</label>
-                            <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={newRoutine.formType} onChange={e => setNewRoutine({...newRoutine, formType: e.target.value})}>
-                              <option value="none">なし（通常）</option>
-                              <option value="inventory">在庫報告フォーム</option>
-                            </select>
+                          <div className="flex-[3] space-y-3 border-l border-slate-200 pl-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-500 mb-1">詳細な手順・説明（任意）</label>
+                              <textarea rows="3" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none" value={newRoutine.description} onChange={e => setNewRoutine({...newRoutine, description: e.target.value})} placeholder="アルバイトへ伝える定常的な注意事項などを入力" />
+                            </div>
                           </div>
                         </div>
-                        <div className="flex-1 space-y-3 border-l border-slate-200 pl-3">
-                          <div>
+
+                        <div className="flex gap-4 border-t border-slate-200 pt-4">
+                          <div className="flex-1">
                             <div className="flex items-center justify-between mb-1">
                               <label className="text-xs font-bold text-slate-500">マニュアルリンク（複数可・任意）</label>
                               <div className="flex items-center gap-2">
-                                <button type="button" onClick={copyDriveUrl} className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1">
-                                  <Copy className="w-3 h-3"/> URLをコピー
+                                <button type="button" onClick={copyDriveUrl} className="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1">
+                                  <Copy className="w-3 h-3"/> URLコピー
                                 </button>
-                                <a href="https://drive.google.com/drive/folders/1wKyynLD_2w9q1GsIWS3YArm6U4n6EERP?usp=drive_link" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded">
+                                <a href="https://drive.google.com/drive/folders/1wKyynLD_2w9q1GsIWS3YArm6U4n6EERP?usp=drive_link" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-700 hover:underline flex items-center gap-1 bg-blue-100 px-2 py-1 rounded">
                                   <Folder className="w-3 h-3"/> ドライブを開く
                                 </a>
                               </div>
@@ -1132,17 +1311,17 @@ export default function ChikyukanTaskSystem() {
                               </button>
                             </div>
                           </div>
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1 mt-2">マニュアルファイルの添付（複数可・任意）</label>
-                            <div className="relative border-2 border-dashed border-slate-300 bg-slate-50 rounded-lg px-2 py-2 text-xs text-slate-500 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-100 transition-colors">
+                          <div className="flex-1">
+                            <label className="block text-xs font-bold text-slate-500 mb-1">マニュアルファイルの添付（任意）</label>
+                            <div className="relative border-2 border-dashed border-slate-300 bg-white rounded-lg px-2 py-2 text-xs text-slate-500 flex items-center justify-center gap-1 cursor-pointer hover:bg-slate-50 transition-colors">
                               <UploadCloud className="w-4 h-4"/>
                               <span>ファイルを選択 (750KB以下)</span>
                               <input type="file" multiple onChange={e => handleMultipleFilesUpload(e, setNewRoutine, 'attachedFiles')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
                             </div>
                             {newRoutine.attachedFiles?.length > 0 && (
-                              <div className="mt-2 space-y-1">
+                              <div className="mt-2 space-y-1 max-h-24 overflow-y-auto custom-scrollbar pr-1">
                                 {newRoutine.attachedFiles.map((file, idx) => (
-                                  <div key={idx} className="flex items-center justify-between bg-white p-1 rounded border border-slate-200 text-[10px]">
+                                  <div key={idx} className="flex items-center justify-between bg-white p-1.5 rounded border border-slate-200 text-[10px]">
                                     <span className="truncate flex-1">{file.name}</span>
                                     <button type="button" onClick={() => setNewRoutine(prev => ({...prev, attachedFiles: prev.attachedFiles.filter((_, i) => i !== idx)}))} className="text-red-500 hover:underline ml-2">削除</button>
                                   </div>
@@ -1151,27 +1330,30 @@ export default function ChikyukanTaskSystem() {
                             )}
                           </div>
                         </div>
-                        <button onClick={handleAddRoutine} disabled={isSubmitting || !newRoutine.name.trim()} className="bg-slate-800 text-white px-5 py-3 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-900 self-end disabled:opacity-50">追加する</button>
+                        <div className="flex justify-end pt-2">
+                          <button onClick={handleAddRoutine} disabled={isSubmitting || !newRoutine.name.trim()} className="bg-slate-800 text-white px-8 py-2.5 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-900 disabled:opacity-50">追加する</button>
+                        </div>
                       </div>
                     </div>
 
                     <div>
-                      <h3 className="text-lg font-black text-slate-800 mb-4 border-b pb-2">登録済みルーティン</h3>
+                      <h3 className="text-lg font-black text-slate-800 mb-4 border-b pb-2 flex items-center gap-2">登録済みルーティン <span className="text-xs text-slate-500 font-normal">※矢印ボタンで優先度（並び順）を変更できます</span></h3>
                       <div className="border border-slate-200 rounded-xl overflow-hidden">
-                        <table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200"><tr><th className="px-4 py-3">ルーティン名</th><th className="px-4 py-3 w-32">特殊フォーム</th><th className="px-4 py-3 min-w-[200px]">マニュアル</th><th className="px-4 py-3 text-center w-24">操作</th></tr></thead>
+                        <table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200"><tr><th className="px-4 py-3">ルーティン名</th><th className="px-4 py-3 w-32">特殊フォーム</th><th className="px-4 py-3 min-w-[200px]">詳細・マニュアル</th><th className="px-4 py-3 text-center w-32">操作・順序</th></tr></thead>
                           <tbody className="divide-y divide-slate-100">
-                            {settings.routines.map(r => (
+                            {settings.routines.map((r, index) => (
                               editingRoutineId === r.id ? (
                                 <tr key={r.id} className="bg-blue-50/50">
                                   <td className="px-3 py-3">
-                                    <input type="text" className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-200 outline-none" value={editRoutineForm.name} onChange={e => setEditRoutineForm({...editRoutineForm, name: e.target.value})} />
+                                    <input type="text" className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-200 outline-none mb-2" value={editRoutineForm.name} onChange={e => setEditRoutineForm({...editRoutineForm, name: e.target.value})} placeholder="ルーティン名" />
+                                    <textarea rows="2" className="w-full px-2 py-1.5 border border-blue-300 rounded text-[10px] outline-none" value={editRoutineForm.description} onChange={e => setEditRoutineForm({...editRoutineForm, description: e.target.value})} placeholder="詳細な説明" />
                                   </td>
-                                  <td className="px-3 py-3">
+                                  <td className="px-3 py-3 align-top">
                                     <select className="w-full px-2 py-1.5 border border-blue-300 rounded text-xs outline-none" value={editRoutineForm.formType} onChange={e => setEditRoutineForm({...editRoutineForm, formType: e.target.value})}>
                                       <option value="none">なし</option><option value="inventory">在庫</option>
                                     </select>
                                   </td>
-                                  <td className="px-3 py-3 space-y-2">
+                                  <td className="px-3 py-3 space-y-2 align-top">
                                     <div className="space-y-1">
                                       {editRoutineForm.attachmentLinks?.map((link, idx) => (
                                         <div key={idx} className="flex gap-1 items-center">
@@ -1206,7 +1388,7 @@ export default function ChikyukanTaskSystem() {
                                       </div>
                                     ))}
                                   </td>
-                                  <td className="px-3 py-3 text-center">
+                                  <td className="px-3 py-3 text-center align-top">
                                     <div className="flex justify-center gap-1.5">
                                       <button onClick={() => handleUpdateRoutine(r.id)} disabled={isSubmitting} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 shadow-sm"><Save className="w-4 h-4"/></button>
                                       <button onClick={() => setEditingRoutineId(null)} className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"><X className="w-4 h-4"/></button>
@@ -1215,9 +1397,12 @@ export default function ChikyukanTaskSystem() {
                                 </tr>
                               ) : (
                                 <tr key={r.id} className="hover:bg-slate-50 group transition-colors">
-                                  <td className="px-4 py-3 font-bold text-slate-800">{r.name}</td>
-                                  <td className="px-4 py-3"><span className="bg-slate-100 px-2 py-1 rounded text-xs">{r.formType === 'inventory' ? '在庫報告' : 'なし'}</span></td>
-                                  <td className="px-4 py-3">
+                                  <td className="px-4 py-3 align-top">
+                                    <div className="font-bold text-slate-800 mb-1">{r.name}</div>
+                                    {r.description && <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{r.description}</div>}
+                                  </td>
+                                  <td className="px-4 py-3 align-top"><span className="bg-slate-100 px-2 py-1 rounded text-xs">{r.formType === 'inventory' ? '在庫報告' : 'なし'}</span></td>
+                                  <td className="px-4 py-3 align-top">
                                     <div className="flex flex-col gap-1">
                                       {(() => {
                                         const displayLinks = r.attachmentLinks?.length > 0 ? r.attachmentLinks : (r.manualUrl ? [{ name: 'マニュアル', url: r.manualUrl }] : []);
@@ -1231,14 +1416,20 @@ export default function ChikyukanTaskSystem() {
                                       {!r.manualUrl && (!r.attachmentLinks || r.attachmentLinks.length === 0) && (!r.attachedFiles || r.attachedFiles.length === 0) && <span className="text-xs text-slate-400 italic">設定なし</span>}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 text-center">
-                                    <div className="flex justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={() => { 
-                                        setEditingRoutineId(r.id); 
-                                        const linksToEdit = r.attachmentLinks?.length > 0 ? r.attachmentLinks : (r.manualUrl ? [{ name: 'マニュアル', url: r.manualUrl }] : []);
-                                        setEditRoutineForm({ name: r.name, formType: r.formType, attachmentLinks: linksToEdit, attachedFiles: r.attachedFiles || [] }); 
-                                      }} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg"><Edit3 className="w-4 h-4"/></button>
-                                      <button onClick={() => handleDeleteRoutine(r.id)} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
+                                  <td className="px-4 py-3 text-center align-top">
+                                    <div className="flex flex-col items-center gap-2">
+                                      <div className="flex justify-center gap-1">
+                                        <button onClick={() => handleMoveRoutineOrder(index, 'up')} disabled={index === 0} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 bg-slate-100 rounded hover:bg-slate-200"><ArrowUp className="w-3 h-3"/></button>
+                                        <button onClick={() => handleMoveRoutineOrder(index, 'down')} disabled={index === settings.routines.length - 1} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 bg-slate-100 rounded hover:bg-slate-200"><ArrowDown className="w-3 h-3"/></button>
+                                      </div>
+                                      <div className="flex justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { 
+                                          setEditingRoutineId(r.id); 
+                                          const linksToEdit = r.attachmentLinks?.length > 0 ? r.attachmentLinks : (r.manualUrl ? [{ name: 'マニュアル', url: r.manualUrl }] : []);
+                                          setEditRoutineForm({ name: r.name, formType: r.formType, description: r.description || '', attachmentLinks: linksToEdit, attachedFiles: r.attachedFiles || [] }); 
+                                        }} className="text-blue-500 hover:bg-blue-50 p-1.5 rounded-lg"><Edit3 className="w-4 h-4"/></button>
+                                        <button onClick={() => handleDeleteRoutine(r.id)} className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4"/></button>
+                                      </div>
                                     </div>
                                   </td>
                                 </tr>
@@ -1266,27 +1457,36 @@ export default function ChikyukanTaskSystem() {
             </div>
             
             <form onSubmit={handleCreateRoutineTask} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-              <div className="bg-slate-100 rounded-lg p-3 text-sm font-bold text-slate-700 mb-4 flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> 対象日: {formatDateWithDay(routineDate)}</div>
+              <div className="bg-slate-100 rounded-lg p-3 text-sm font-bold text-slate-700 flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> 対象日: {formatDateWithDay(routineDate)}</div>
+
+              {selectedNewRoutine.description && (
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 text-sm text-blue-900 whitespace-pre-wrap leading-relaxed shadow-sm">
+                  <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><Info className="w-4 h-4"/> 詳細・説明</h4>
+                  {selectedNewRoutine.description}
+                </div>
+              )}
 
               {/* マニュアル・手順書エリア */}
               {(() => {
                 const displayLinks = selectedNewRoutine.attachmentLinks?.length > 0 ? selectedNewRoutine.attachmentLinks : (selectedNewRoutine.manualUrl ? [{ name: 'マニュアル', url: selectedNewRoutine.manualUrl }] : []);
                 if (displayLinks.length > 0 || (selectedNewRoutine.attachedFiles && selectedNewRoutine.attachedFiles.length > 0)) {
                   return (
-                    <div className="space-y-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100 mb-4">
-                      <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> マニュアル・手順書</h4>
-                      {displayLinks.map((link, idx) => (
-                        link.url && (
-                          <a key={`link-${idx}`} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
-                            <ExternalLink className="w-4 h-4" /> {link.name || 'リンクを開く'}
+                    <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                      <h4 className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> マニュアル・関連資料</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {displayLinks.map((link, idx) => (
+                          link.url && (
+                            <a key={`link-${idx}`} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                              <ExternalLink className="w-4 h-4 shrink-0" /> <span className="truncate">{link.name || 'リンクを開く'}</span>
+                            </a>
+                          )
+                        ))}
+                        {selectedNewRoutine.attachedFiles?.map((file, idx) => (
+                          <a key={`file-${idx}`} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                            <File className="w-4 h-4 text-blue-400 shrink-0" /> <span className="truncate">{file.name}</span>
                           </a>
-                        )
-                      ))}
-                      {selectedNewRoutine.attachedFiles?.map((file, idx) => (
-                        <a key={`file-${idx}`} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
-                          <File className="w-4 h-4 text-blue-400" /> {file.name}
-                        </a>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   );
                 }
@@ -1294,7 +1494,7 @@ export default function ChikyukanTaskSystem() {
               })()}
 
               {isEmployee && (
-                <div className="flex gap-4 border-b border-slate-100 pb-4">
+                <div className="flex gap-4 border-b border-slate-100 pb-4 pt-2">
                   <label className={`flex-1 p-3 rounded-xl border-2 text-center cursor-pointer transition-all font-bold text-sm ${routineForm.action === 'request' ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 hover:border-slate-300 text-slate-600'}`}>
                     <input type="radio" className="hidden" checked={routineForm.action === 'request'} onChange={() => setRoutineForm({...routineForm, action: 'request'})} />
                     事前指示・申し送りをする
@@ -1309,7 +1509,7 @@ export default function ChikyukanTaskSystem() {
               {routineForm.action === 'request' ? (
                 <div className="space-y-6 animate-in fade-in">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">本日の指示・連絡メモ（任意）</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">本日の追加指示・連絡メモ（任意）</label>
                     <textarea rows="4" className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-200 outline-none bg-slate-50 focus:bg-white" value={routineForm.description} onChange={e => setRoutineForm({...routineForm, description: e.target.value})} placeholder="具体的な手順や注意書きがあれば記入してください" />
                   </div>
                   
@@ -1379,7 +1579,7 @@ export default function ChikyukanTaskSystem() {
                   {!isEmployee && (
                     <div className="mb-4">
                       <label className="block text-sm font-bold text-slate-700 mb-2">実施した人の名前 <span className="text-red-500">*</span></label>
-                      <input type="text" required className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-200 outline-none bg-slate-50 focus:bg-white" value={routineForm.actualAssignee} onChange={e => setRoutineForm({...routineForm, actualAssignee: e.target.value})} placeholder="例：山田太郎" />
+                      <input type="text" required className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:border-teal-500 outline-none bg-slate-50 focus:bg-white" value={routineForm.actualAssignee} onChange={e => setRoutineForm({...routineForm, actualAssignee: e.target.value})} placeholder="例：山田太郎" />
                     </div>
                   )}
 
@@ -1553,8 +1753,16 @@ export default function ChikyukanTaskSystem() {
                 )}
               </div>
 
+              {selectedTask.masterDescription && selectedTask.type === 'routine' && (
+                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-200 text-sm text-blue-900 whitespace-pre-wrap leading-relaxed shadow-sm">
+                  <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><Info className="w-4 h-4"/> 詳細・説明</h4>
+                  {selectedTask.masterDescription}
+                </div>
+              )}
+
               {selectedTask.description && (
                 <div className="bg-slate-50 p-4 rounded-xl text-sm text-slate-700 whitespace-pre-wrap leading-relaxed border border-slate-100">
+                  {selectedTask.type === 'routine' && <h4 className="text-xs font-bold text-slate-500 mb-2">本日の追加指示</h4>}
                   {selectedTask.description}
                 </div>
               )}
@@ -1568,20 +1776,22 @@ export default function ChikyukanTaskSystem() {
 
                 if (displayLinks.length > 0 || (selectedTask.attachedFiles && selectedTask.attachedFiles.length > 0)) {
                   return (
-                    <div className="space-y-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                      <h4 className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> 関連リンク・資料</h4>
-                      {displayLinks.map((link, idx) => (
-                        link.url && (
-                          <a key={`link-${idx}`} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
-                            <ExternalLink className="w-4 h-4" /> {link.name || 'リンクを開く'}
+                    <div className="space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                      <h4 className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1"><BookOpen className="w-4 h-4"/> 関連リンク・資料</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {displayLinks.map((link, idx) => (
+                          link.url && (
+                            <a key={`link-${idx}`} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                              <ExternalLink className="w-4 h-4 shrink-0" /> <span className="truncate">{link.name || 'リンクを開く'}</span>
+                            </a>
+                          )
+                        ))}
+                        {selectedTask.attachedFiles?.map((file, idx) => (
+                          <a key={`file-${idx}`} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
+                            <File className="w-4 h-4 text-blue-400 shrink-0" /> <span className="truncate">{file.name}</span>
                           </a>
-                        )
-                      ))}
-                      {selectedTask.attachedFiles?.map((file, idx) => (
-                        <a key={`file-${idx}`} href={file.data} download={file.name} className="flex items-center gap-2 w-full p-3 bg-white hover:bg-blue-50 text-blue-700 rounded-lg font-bold transition-colors border border-blue-200 shadow-sm text-sm">
-                          <File className="w-4 h-4 text-blue-400" /> 指示ファイル ({file.name})
-                        </a>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   );
                 }
@@ -1675,10 +1885,12 @@ export default function ChikyukanTaskSystem() {
                       {selectedTask.reportMemo && <div className="mt-2 pt-2 border-t border-teal-100"><strong>報告メモ:</strong><br/>{selectedTask.reportMemo}</div>}
                       {selectedTask.inventoryDetails && (
                         <div className="mt-2 pt-2 border-t border-teal-100">
-                          <strong>在庫報告:</strong>
-                          <ul className="flex gap-4 mt-1">
-                            <li>A3: {selectedTask.inventoryDetails.a3||'-'}</li><li>A4: {selectedTask.inventoryDetails.a4||'-'}</li>
-                            <li>B4: {selectedTask.inventoryDetails.b4||'-'}</li><li>B5: {selectedTask.inventoryDetails.b5||'-'}</li>
+                          <strong className="text-red-600 flex items-center gap-1 mb-1"><Package className="w-4 h-4"/> 在庫報告:</strong>
+                          <ul className="flex gap-4 mt-1 font-bold">
+                            <li>A3: <span className={selectedTask.inventoryDetails.a3 && Number(selectedTask.inventoryDetails.a3) <= (settings.alertSettings?.inventoryThreshold || 10) ? 'text-red-600' : ''}>{selectedTask.inventoryDetails.a3||'-'}</span></li>
+                            <li>A4: <span className={selectedTask.inventoryDetails.a4 && Number(selectedTask.inventoryDetails.a4) <= (settings.alertSettings?.inventoryThreshold || 10) ? 'text-red-600' : ''}>{selectedTask.inventoryDetails.a4||'-'}</span></li>
+                            <li>B4: <span className={selectedTask.inventoryDetails.b4 && Number(selectedTask.inventoryDetails.b4) <= (settings.alertSettings?.inventoryThreshold || 10) ? 'text-red-600' : ''}>{selectedTask.inventoryDetails.b4||'-'}</span></li>
+                            <li>B5: <span className={selectedTask.inventoryDetails.b5 && Number(selectedTask.inventoryDetails.b5) <= (settings.alertSettings?.inventoryThreshold || 10) ? 'text-red-600' : ''}>{selectedTask.inventoryDetails.b5||'-'}</span></li>
                           </ul>
                         </div>
                       )}
